@@ -4,13 +4,80 @@ from PyQt6.QtGui import QAction, QKeyEvent
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget, QLineEdit, QPushButton, QComboBox, QCheckBox, QMessageBox, QToolBar, QMenuBar, QFileDialog, QDialog, QTextEdit, QMenu, QGridLayout, QFrame
 import pyqtgraph as pg
 import numpy as np
-from dataset_functions import read_file_csv_like_native
+import pandas as pd
 from scipy.signal import butter, ellip, cheby1, bessel
 from rr_algorithms import srmac_inline, cwt_peaks_custom, terma_corrected, sos_filt, sqi_visual, z_norm, find_peaks_fast, cwt_peaks_oa
 
 ### Most important default data parameters
 sample_rate = 64
 ### Other parameters can be changed as needed within MainWindow.__init__
+
+### Helper function to read a .csv file
+def read_file_csv_like(filepath, key_data=None, key_time=None, delimiter=None):
+    """
+    Generic function to read a .csv file with predefined keys
+    """
+    data_file = pd.read_csv(filepath, delimiter=delimiter, encoding="utf-8")
+
+    if key_data is None:
+        key_data = 1
+
+    if key_time is None:
+        key_time = 0
+
+    key_time = data_file.keys()[key_time]
+    key_data = data_file.keys()[key_data]
+
+    time_raw = data_file[key_time]
+    data_raw = data_file[key_data]
+
+    data_raw = np.array(data_raw.tolist())
+    time_raw = np.array(time_raw.tolist())
+
+    return data_raw, time_raw
+    
+### Helper function to read a .csv file without using pandas
+def read_file_csv_like_native(filepath, key_data=None, key_time=None, delimiter=None, start_index=None):
+    """
+    Generic function to read a .csv file with predefined keys implemented using native python file processing
+    """
+
+    if delimiter is None:
+        delimiter = ","
+
+    if key_data is None:
+        key_data = 1
+
+    if key_time is None:
+        key_time = 0
+
+    time_raw = []
+    data_raw = []
+
+    with open(filepath, "r", encoding="utf-8") as file:
+        for i, line in enumerate(file):
+            if i < start_index:
+                continue
+            try:
+                line = line.split(delimiter)
+                try:
+                    time_raw.append(float(line[key_time]))
+                except: 
+                    ### Neulog style time column
+                    time = line[key_time].split("'")[1].split(":")
+                    time = float(time[0]) * 3600.0 + float(time[1]) * 60.0 + float(time[2])
+                    time_raw.append(time)
+                try:
+                    data_raw.append(float(line[key_data]))
+                except:
+                    data_raw.append(float(line[key_data].split("\n")[0]))
+            except:
+                print("Couldn't parse line "+str(i)+"... "+str(line))
+
+    data_raw = np.array(data_raw)
+    time_raw = np.array(time_raw)
+
+    return data_raw, time_raw
 
 ### GUI ###################################################
 
