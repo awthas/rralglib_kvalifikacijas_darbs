@@ -716,7 +716,7 @@ def terma_corrected(data, fs, window_size=None, window_event=None, window_cycle=
     return rr, peaks
 
 ### Count-orig peak detection method described in https://link.springer.com/article/10.1007/s10439-007-9428-1 ### https://github.com/peterhcharlton/RRest/blob/master/RRest_v3.0/Algorithms/estimate_rr/CtO.m
-def count_orig(data, fs, window_size=None, args=None):
+def count_orig(data, fs, window_size=None, max_troughs=None, percentile=None, th_coef=None, args=None):
 
     data = np.atleast_1d(data)
 
@@ -729,9 +729,26 @@ def count_orig(data, fs, window_size=None, args=None):
     if window_size is None:
         window_size = len(data)
 
-    max_troughs = 1
-    percentile = 75
-    th_coef = 0.2
+    ### Parameters
+    if args is None:
+        if max_troughs is None:
+            max_troughs = 1
+        else:
+            max_troughs = int(max_troughs)
+
+        if percentile is None:
+            percentile = 75
+        else:
+            percentile = int(percentile)
+
+        if th_coef is None:
+            th_coef = 0.2
+        else:
+            th_coef = float(th_coef)
+    else:
+        max_troughs = int(args[0]) if args[0] != -1 else 1
+        percentile = int(args[1]) if args[1] != -1 else 75
+        th_coef = float(args[2]) if args[2] != -1 else 0.2
 
     ### Find local maxima
     peaks = local_maxima(data)
@@ -768,7 +785,7 @@ def count_orig(data, fs, window_size=None, args=None):
     return rr, cycles
 
 ### Count-adv peak detection method described in https://link.springer.com/article/10.1007/s10439-007-9428-1 ### https://github.com/peterhcharlton/RRest/blob/master/RRest_v3.0/Algorithms/estimate_rr/CtA.m
-def count_adv(data, fs, window_size=None, args=None): 
+def count_adv(data, fs, window_size=None, percentile=None, th_coef=None, args=None): 
     
     data = np.atleast_1d(data)
 
@@ -781,8 +798,20 @@ def count_adv(data, fs, window_size=None, args=None):
     if window_size is None:
         window_size = len(data)
 
-    percentile = 75
-    th_coef = 0.8
+    ### Parameters
+    if args is None:
+        if percentile is None:
+            percentile = 75
+        else:
+            percentile = int(percentile)
+
+        if th_coef is None:
+            th_coef = 0.8
+        else:
+            th_coef = float(th_coef)
+    else:
+        percentile = int(args[1]) if args[1] != -1 else 75
+        th_coef = float(args[2]) if args[2] != -1 else 0.8
 
     ### Find local maxima
     peaks = local_maxima(data)
