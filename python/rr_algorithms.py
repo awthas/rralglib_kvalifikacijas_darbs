@@ -1,7 +1,5 @@
 import numpy as np
 import math
-import matplotlib.pyplot as plt
-from scipy.signal import butter, freqs, sosfilt, cheby2
 
 ### The main rralglib equivalent python library ###
 
@@ -232,6 +230,8 @@ def sqi_visual(peaks, raw_signal, max_interval=None):
     if len(segments) < 1:
         return 0, []
 
+    segments = np.array(segments)
+
     ### Calculate the average segment
     avg_segment = np.zeros(len(segments[0]))
     for i in range(len(segments[0])):
@@ -243,6 +243,56 @@ def sqi_visual(peaks, raw_signal, max_interval=None):
     pearson_coefs = np.zeros(len(segments))
     for i, segment in enumerate(segments):
         pearson_coefs[i] = pearson(segment, avg_segment)
+
+    ### Calculate the average pearson coefficient
+    coef = np.mean(pearson_coefs)
+
+    return coef, segments
+
+### SQI naive approach
+def sqi_lite(peaks, raw_signal, max_interval=None):
+
+    peaks = np.atleast_1d(peaks)
+    raw_signal = np.atleast_1d(raw_signal)
+
+    if len(peaks) < 2:
+        return 0, []
+    
+    if len(raw_signal) < 1:
+        return 0, []
+
+    coef = 0
+    segments = []
+
+    ### Find the average distance between peaks
+    avg_dist = (peaks[-1] - peaks[0]) // (len(peaks))
+
+    ### Check if any distances are larger than max_interval and find min and max distances
+    max_dist, min_dist = 0, 0
+    if max_interval != None:
+        for i in range(len(peaks)-1):
+            dist = peaks[i+1] - peaks[i] > max_interval
+            if dist > max_interval:
+                return 0, []
+            if dist > max_dist:
+                max_dist = dist
+            elif dist < min_dist:
+                min_dist = dist
+
+    ### Save each peak segment
+    for peak in peaks:
+        if peak - (avg_dist//2) > 0 and peak + (avg_dist//2) < len(raw_signal):
+            segments.append(raw_signal[peak-(avg_dist//2):peak+(avg_dist//2)])
+
+    if len(segments) < 1:
+        return 0, []
+
+    segments = np.array(segments)
+
+    ### Calculate the pearson coefficient for each neightbouring pair of segments
+    pearson_coefs = np.zeros(len(segments)-1)
+    for i in range(len(segments)-1):
+        pearson_coefs[i] = pearson(segments[i], segments[i+1])
 
     ### Calculate the average pearson coefficient
     coef = np.mean(pearson_coefs)
@@ -784,7 +834,7 @@ def count_adv(data, fs, window_size=None, args=None):
     return rr, extrema[::2]
 
 ### Method for finding peaks in zero-crossing data
-def zero_crossing(data, width, fs, th=0, rawdata=None, margin=None):
+def zero_crossing(data, width, fs=None, th=0, rawdata=None, margin=None):
     
     data = np.atleast_1d(data)
 
@@ -847,6 +897,9 @@ def wavelet(t, tau, scale, wavelet="gaus2"):
 
 ### Index bit-reverse sort algorithm ### Required as part of the FFT procedure in order for results to be returned in natural order
 def bit_reverse_sort(x):  ### Pseudocode source: https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm#Data_reordering,_bit_reversal,_and_in-place_algorithms
+
+    x = np.atleast_1d(x)
+
     N = len(x)
 
     if math.log2(N) % 1 != 0.0:
@@ -1199,262 +1252,3 @@ def cwt_peaks_oa(data, fs, window_size=None, resolution=None, threshold=None, wi
     rr = find_rr_dist(peaks, fs)
 
     return rr, peaks
-
-### Mimic the ESP realtime joint HR-RR algorithm in non-realtime
-def realtime_params(signal, fs, window_size, delta_calc, srmac_coefs=[[0.997, 0.214, 0.051],[0.553, 0.0316, 0.007]], params=None):
-    signal = np.atleast_1d(signal)
-
-    hrs, rrs = [], []
-
-    window_size = int(window_size * fs)
-    delta_calc = int(delta_calc * fs)
-
-    if delta_calc >= window_size:
-        return hrs, rrs
-
-    PLOT = False
-
-    ### Filter coefficients
-
-    sos_hpf_card_b = butter(3, 1.0 / (fs * 0.5), analog=False, btype="high", output="sos")
-    sos_hpf_card_c = cheby2(5, 3.0, 1.0 / (fs * 0.5), analog=False, btype="high", output="sos")
-    sos_lpf_card_b = butter(3, 3.3 / (fs * 0.5), analog=False, btype="low", output="sos")
-    sos_lpf_card_c = cheby2(5, 3.0, 3.3 / (fs * 0.5), analog=False, btype="low", output="sos")
-    sos_hpf_resp = butter(3, 0.1 / (fs * 0.5), analog=False, btype="high", output="sos")
-    sos_lpf_resp = butter(3, 0.8 / (fs * 0.5), analog=False, btype="low", output="sos")
-
-    ### SRMAC coefficients
-
-    srmac_coefs_card = np.array(srmac_coefs[0])
-    srmac_coefs_resp = np.array(srmac_coefs[1])
-    # srmac_coefs_resp = np.array([0.001, 0.218, 0.113375])
-    # srmac_width_card = fs//5
-    # srmac_width_resp = (fs//16)*11
-    srmac_width_card = 8
-    srmac_width_resp = 44
-
-    ### Subtract the running mean from the signal
-
-    maxn = fs * window_size * 3
-    n, acc, mean = 0, 0, 0
-    for i in range(len(signal)):
-        if n < maxn:
-            n += 1
-            acc += signal[i]
-            mean = acc / n
-        else:
-            acc -= mean
-            acc += signal[i]
-            mean = acc / maxn
-        signal[i] -= mean
-
-    ### Split and filter the signals
-
-    signal_card = np.copy(signal)
-    signal_resp = np.copy(signal)
-
-    # signal_card = sos_filt(signal_card, sos_hpf_card_c)
-    # signal_card = sos_filt(signal_card, sos_lpf_card_c)
-    signal_card = sos_filt(signal_card, sos_hpf_card_b)
-    signal_card = sos_filt(signal_card, sos_lpf_card_b)
-
-    signal_resp = sos_filt(signal_resp, sos_hpf_resp)
-    signal_resp = sos_filt(signal_resp, sos_lpf_resp)
-
-    ### Filter the signals further with SRMAC
-
-    srmac_state_card = np.zeros(3)
-    srmac_state_resp = np.zeros(3)
-
-    if PLOT:
-        fig, ax = plt.subplots(1,1)
-        ax.plot(signal_card)
-
-    ### SRMAC
-    for i in range(len(signal)):
-        sample = signal_card[i]
-        srmac_state_card[0] = sample * srmac_coefs_card[0] + srmac_state_card[0] * (1 - srmac_coefs_card[0])
-        srmac_state_card[1] = sample * srmac_coefs_card[1] + srmac_state_card[1] * (1 - srmac_coefs_card[1])
-        srmac_state_card[2] = (srmac_state_card[0] - srmac_state_card[1]) * srmac_coefs_card[2] + srmac_state_card[2] * (1 - srmac_coefs_card[2])
-        signal_card[i] = srmac_state_card[2]
-
-        sample = signal_resp[i]
-        srmac_state_resp[0] = sample * srmac_coefs_resp[0] + srmac_state_resp[0] * (1 - srmac_coefs_resp[0])
-        srmac_state_resp[1] = sample * srmac_coefs_resp[1] + srmac_state_resp[1] * (1 - srmac_coefs_resp[1])
-        srmac_state_resp[2] = (srmac_state_resp[0] - srmac_state_resp[1]) * srmac_coefs_resp[2] + srmac_state_resp[2] * (1 - srmac_coefs_resp[2])
-        signal_resp[i] = srmac_state_resp[2]
-
-    # ### TERMA
-    # rr_w1 = int(fs * 4.0)
-    # rr_w2 = int(fs * 1.0)
-    # rr_w1_buf = np.zeros(rr_w1)
-    # rr_w2_buf = np.zeros(rr_w2)
-    # hr_w1 = int(fs * 1.0)
-    # hr_w2 = int(fs * 0.25)
-    # hr_w1_buf = np.zeros(hr_w1)
-    # hr_w2_buf = np.zeros(hr_w2)
-
-    # acoef = 0
-
-    # ### Resp
-    # for i in range(rr_w1):
-    #     if i-(rr_w1//2) >= 0:
-    #         rr_w1_buf[i] = signal_resp[i]
-
-    # for i in range(rr_w2):
-    #     if i-(rr_w2//2) >= 0:
-    #         rr_w2_buf[i] = signal_resp[i]
-
-    # ### Card
-    # for i in range(hr_w1):
-    #     if i-(hr_w1//2) >= 0:
-    #         hr_w1_buf[i] = signal_card[i]
-
-    # for i in range(hr_w2):
-    #     if i-(hr_w2//2) >= 0:
-    #         hr_w2_buf[i] = signal_card[i]
-
-    # for i in range(len(signal)):
-
-    #     ### Resp
-    #     signal_resp[i] = np.sum(rr_w1_buf)/rr_w1 - np.sum(rr_w2_buf)/rr_w2 + acoef
-
-    #     for j in range(rr_w1-1):
-    #         rr_w1_buf[j] = rr_w1_buf[j+1]
-
-    #     for j in range(rr_w2-1):
-    #         rr_w2_buf[j] = rr_w2_buf[j+1]
-
-    #     if i + 1 + rr_w1//2 < len(signal):
-    #         rr_w1_buf[-1] = signal_resp[i + 1 + rr_w1//2]
-    #     else:
-    #         rr_w1_buf[-1] = 0
-
-    #     if i + 1 + rr_w2//2 < len(signal):
-    #         rr_w2_buf[-1] = signal_resp[i + 1 + rr_w2//2]
-    #     else:
-    #         rr_w1_buf[-1] = 0
-
-    #     ### Card
-    #     signal_card[i] = np.sum(hr_w1_buf)/hr_w1 - np.sum(hr_w2_buf)/hr_w2 + acoef
-
-    #     for j in range(hr_w1-1):
-    #         hr_w1_buf[j] = hr_w1_buf[j+1]
-
-    #     for j in range(hr_w2-1):
-    #         hr_w2_buf[j] = hr_w2_buf[j+1]
-
-    #     if i + 1 + hr_w1//2 < len(signal):
-    #         hr_w1_buf[-1] = signal_card[i + 1 + hr_w1//2]
-    #     else:
-    #         hr_w1_buf[-1] = 0
-
-    #     if i + 1 + hr_w2//2 < len(signal):
-    #         hr_w2_buf[-1] = signal_card[i + 1 + hr_w2//2]
-    #     else:
-    #         hr_w1_buf[-1] = 0
-
-    if PLOT:
-        ax.plot(signal_card, c='orange')
-        ax.hlines(y=[0],xmin=0,xmax=len(signal_card),colors='r')
-        plt.show()
-
-    ### Step through the signals in windows and calculate parameters
-    for i in range(-window_size, len(signal)-window_size, delta_calc):
-        heartbeats, breaths = [], []
-
-        if i > 0: left_edge = i
-        else: left_edge = 0
-
-        right_edge = i+window_size 
-        if right_edge < 0:
-            continue
-        
-        card_positive = 0
-        card_distance_from_peak = 0
-        card_maximum = 0
-
-        resp_positive = 0
-        resp_distance_from_peak = 0
-        resp_maximum = 0
-
-        ### Cardiac zero-crossing
-        # for j in range(left_edge+(window_size//2), right_edge):
-        for j in range(left_edge, right_edge):
-            if signal_card[j] > 0: 
-                ### Cardiac positive edge
-                card_positive += 1
-                card_distance_from_peak += 1
-
-                if signal_card[j] > card_maximum:
-                    card_maximum = signal_card[j]
-                    card_distance_from_peak = 0
-            else: 
-                ### Cardiac negative edge
-                if card_positive > srmac_width_card: 
-                    ### Real heartbeat detected
-                    heartbeats.append(j-card_distance_from_peak-left_edge)
-
-                card_positive = 0
-                card_distance_from_peak = 0
-                card_maximum = 0
-
-        ### Respiratory zero-crossing
-        for j in range(left_edge, right_edge):
-            if signal_resp[j] > 0: 
-                ### Respiratory positive edge
-                resp_positive += 1
-                resp_distance_from_peak += 1
-
-                if signal_resp[j] > resp_maximum:
-                    resp_maximum = signal_resp[j]
-                    resp_distance_from_peak = 0
-            else: 
-                ### Respiratory negative edge
-                if resp_positive > srmac_width_resp: 
-                    ### Real breath detected
-                    breaths.append(j-resp_distance_from_peak-left_edge)
-
-                resp_positive = 0
-                resp_distance_from_peak = 0
-                resp_maximum = 0
-
-        ### SQI
-        #...
-
-        ### Calculate heartrate
-        if len(heartbeats) > 2:
-            hr = (heartbeats[-1]-heartbeats[1]) / (len(heartbeats)-2)
-            hr = (60*fs)/hr
-        elif len(heartbeats) > 1:
-            hr = (heartbeats[-1]-heartbeats[0]) / (len(heartbeats)-1)
-            hr = (60*fs)/hr
-        else:
-            hr = 0
-        hrs.append(hr)
-
-        ### Calculate heartrate without MA
-        # if len(heartbeats) > 1:
-        #     hr = (heartbeats[-1]-heartbeats[-2])
-        #     hr = (60*fs)/hr
-        # else:
-        #     hr = 0
-        # hrs.append(hr)
-
-        ### Calculate respiratory rate
-        if len(breaths) > 2:
-            rr = (breaths[-1]-breaths[1]) / (len(breaths)-2)
-            rr = (60*fs)/rr
-        elif len(breaths) > 1:
-            rr = (breaths[-1]-breaths[0]) / (len(breaths)-1)
-            rr = (60*fs)/rr
-        else:
-            rr = 0
-        rrs.append(rr)
-
-        # fig, ax = plt.subplots(1,1)
-        # ax.plot(signal_resp[left_edge:right_edge])
-        # ax.scatter(breaths, signal_resp[left_edge:right_edge][breaths], c='r')
-        # plt.show()
-
-    return hrs, rrs
