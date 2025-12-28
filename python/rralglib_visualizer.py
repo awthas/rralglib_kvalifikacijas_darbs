@@ -6,7 +6,7 @@ import pyqtgraph as pg
 import numpy as np
 import pandas as pd
 from scipy.signal import butter, ellip, cheby1, bessel
-from rr_algorithms import srmac_inline, cwt_peaks_custom, terma_corrected, sos_filt, sqi_visual, z_norm, find_peaks_fast, cwt_peaks_oa
+from rralglib import srmac, cwt_peaks, terma, sos_filt, sqi_full, z_norm, find_peaks, cwt_peaks_oa
 
 ### Most important default data parameters
 sample_rate = 64
@@ -259,7 +259,11 @@ class ReadFileDialog(QDialog):
 
     ### Try to update the starting index
     def update_start_index(self):
-        print("Unimplemented")
+        try:
+            self.start_index = int(self.input_startindex.text())
+        except:
+            self.start_index = None
+            print("Invalid start index")
 
     ### Read the first few lines of the file to show a file preview
     def set_file_preview(self):
@@ -795,11 +799,11 @@ class MainWindow(QWidget):
     ### Wrapper function for calling respiratory rate algorithms
     def run_algorithm(self, data):
         if self.algorithm == "srmac":
-            rr, peaks = srmac_inline(data, self.sample_rate, len(data), coef_fast=self.params_srmac_coef_fast, coef_slow=self.params_srmac_coef_slow, coef_cross=self.params_srmac_coef_cross, width=self.params_srmac_width, threshold=self.params_srmac_th)
+            rr, peaks = srmac(data, self.sample_rate, len(data), coef_fast=self.params_srmac_coef_fast, coef_slow=self.params_srmac_coef_slow, coef_cross=self.params_srmac_coef_cross, width=self.params_srmac_width, threshold=self.params_srmac_th)
         elif self.algorithm == "terma":
-            rr, peaks = terma_corrected(data, self.sample_rate, len(data), window_event=self.params_terma_w1, window_cycle=self.params_terma_w2, b_coef=self.params_terma_b, width=self.params_terma_width)
+            rr, peaks = terma(data, self.sample_rate, len(data), window_event=self.params_terma_w1, window_cycle=self.params_terma_w2, b_coef=self.params_terma_b, width=self.params_terma_width)
         elif self.algorithm == "find_peaks":
-            rr, peaks = find_peaks_fast(data, self.sample_rate, len(data))
+            rr, peaks = find_peaks(data, self.sample_rate, len(data))
         elif self.algorithm == "cwt":
             rr, peaks = cwt_peaks_oa(data, self.sample_rate, len(data))
         else:
