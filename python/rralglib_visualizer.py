@@ -1,6 +1,6 @@
 import sys, os, time
 from PyQt6.QtCore import Qt, QRect, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QKeyEvent
+from PyQt6.QtGui import QAction, QKeyEvent, QDoubleValidator, QIntValidator, QRegularExpressionValidator
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget, QLineEdit, QPushButton, QComboBox, QCheckBox, QMessageBox, QToolBar, QMenuBar, QFileDialog, QDialog, QTextEdit, QMenu, QGridLayout, QFrame
 import pyqtgraph as pg
 import numpy as np
@@ -37,7 +37,7 @@ def read_file_csv_like(filepath, key_data=None, key_time=None, delimiter=None):
     return data_raw, time_raw
     
 ### Helper function to read a .csv file without using pandas
-def read_file_csv_like_native(filepath, key_data=None, key_time=None, delimiter=None, start_index=None):
+def read_file_csv_like_native(filepath, key_data=None, key_time=None, delimiter=None, start_index=0):
     """
     Generic function to read a .csv file with predefined keys implemented using native python file processing
     """
@@ -81,6 +81,28 @@ def read_file_csv_like_native(filepath, key_data=None, key_time=None, delimiter=
 
 ### GUI ###################################################
 
+### Error dialog window
+class ErrorDialog(QDialog):
+    def __init__(self, parent, message):
+        super(ErrorDialog, self).__init__(parent=parent)
+
+        self.setWindowTitle("ERROR")
+        self.main_layout = QVBoxLayout(self)
+
+        self.setMinimumWidth(200)
+        self.setMinimumHeight(100)
+
+        self.msg = QLabel(str(message))
+        self.main_layout.addWidget(self.msg)
+
+        ### Confirm button
+        self.button_confirm = QPushButton("OK")
+        self.button_confirm.pressed.connect(self.ok_button_pressed)
+        self.main_layout.addWidget(self.button_confirm)
+
+    def ok_button_pressed(self):
+        self.accept()
+
 ### Read file dialog window
 class ReadFileDialog(QDialog):
     def __init__(self, parent, selected_file):
@@ -94,13 +116,12 @@ class ReadFileDialog(QDialog):
         self.ydata = None
         self.sample_rate = None
         self.filename = None
-        self.start_index = 0
         self.delimiter = None
         self.key_time = None
         self.key_data = None
 
         if self.selected_file is None:
-            print("Error: No valid file selected")
+            ErrorDialog(self, "Error: No valid file selected").exec()
             self.reject()
             self.close()
 
@@ -142,8 +163,9 @@ class ReadFileDialog(QDialog):
         self.input_samplerate = QLineEdit()
         self.input_samplerate.setMaximumWidth(50)
         self.input_samplerate.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.input_samplerate.setValidator(QIntValidator(1,10000))
         self.input_samplerate.textChanged.connect(self.update_sample_rate)
-        self.input_samplerate_label_2 = QLabel("(leave blank to calculate sample rate automatically)")
+        self.input_samplerate_label_2 = QLabel("(Leave blank to calculate sample rate automatically)")
         self.input_samplerate_label_2.setStyleSheet("color: grey; font: italic")
         self.input_layout.addWidget(self.input_samplerate_label_1, 0, 1)
         self.input_layout.addWidget(self.input_samplerate, 0, 2)
@@ -158,7 +180,7 @@ class ReadFileDialog(QDialog):
         self.input_delimiter.setMaxLength(1)
         self.input_delimiter.setText(",")
         self.input_delimiter.textChanged.connect(self.update_delimiter)
-        self.input_delimiter_label_2 = QLabel("(default: ,)")
+        self.input_delimiter_label_2 = QLabel("(Default: ,)")
         self.input_delimiter_label_2.setStyleSheet("color: grey; font: italic")
         self.input_layout.addWidget(self.input_delimiter_label_1, 1, 1)
         self.input_layout.addWidget(self.input_delimiter, 1, 2)
@@ -172,8 +194,9 @@ class ReadFileDialog(QDialog):
         self.input_timecolumn.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.input_timecolumn.setMaxLength(2)
         self.input_timecolumn.setText("0")
+        self.input_timecolumn.setValidator(QIntValidator(1,10000))
         self.input_timecolumn.textChanged.connect(self.update_time_column)
-        self.input_timecolumn_label_2 = QLabel("(default: 0)")
+        self.input_timecolumn_label_2 = QLabel("(Default: 0)")
         self.input_timecolumn_label_2.setStyleSheet("color: grey; font: italic")
         self.input_layout.addWidget(self.input_timecolumn_label_1, 2, 1)
         self.input_layout.addWidget(self.input_timecolumn, 2, 2)
@@ -187,26 +210,13 @@ class ReadFileDialog(QDialog):
         self.input_datacolumn.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.input_datacolumn.setMaxLength(2)
         self.input_datacolumn.setText("1")
+        self.input_datacolumn.setValidator(QIntValidator(1,10000))
         self.input_datacolumn.textChanged.connect(self.update_data_column)
-        self.input_datacolumn_label_2 = QLabel("(default: 1)")
+        self.input_datacolumn_label_2 = QLabel("(Default: 1)")
         self.input_datacolumn_label_2.setStyleSheet("color: grey; font: italic")
         self.input_layout.addWidget(self.input_datacolumn_label_1, 3, 1)
         self.input_layout.addWidget(self.input_datacolumn, 3, 2)
         self.input_layout.addWidget(self.input_datacolumn_label_2, 3, 3)
-
-        ### Start index input
-        self.input_startindex_label_1 = QLabel("Start index: ")
-        self.input_startindex_label_1.setFixedWidth(75)
-        self.input_startindex = QLineEdit()
-        self.input_startindex.setMaximumWidth(50)
-        self.input_startindex.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.input_startindex.setText("0")
-        self.input_startindex.textChanged.connect(self.update_start_index)
-        self.input_startindex_label_2 = QLabel("(default: 0)")
-        self.input_startindex_label_2.setStyleSheet("color: grey; font: italic")
-        self.input_layout.addWidget(self.input_startindex_label_1, 4, 1)
-        self.input_layout.addWidget(self.input_startindex, 4, 2)
-        self.input_layout.addWidget(self.input_startindex_label_2, 4, 3)
 
         ## Bottom layout
         self.bottom_layout = QHBoxLayout()
@@ -228,7 +238,7 @@ class ReadFileDialog(QDialog):
             self.sample_rate = int(self.input_samplerate.text())
         except:
             self.sample_rate = None
-            print("Invalid sample rate")
+            ErrorDialog(self, "Invalid sample rate.").exec()
 
     ### Try to update the delimiter
     def update_delimiter(self):
@@ -236,10 +246,10 @@ class ReadFileDialog(QDialog):
             self.delimiter = str(self.input_delimiter.text())
             if len(self.delimiter) != 1:
                 self.delimiter = None
-                print("Delimiter must be exactly one character")
+                ErrorDialog(self, "Delimiter must be exactly one character.").exec()
         except:
             self.delimiter = None
-            print("Invalid delimiter")
+            ErrorDialog(self, "Invalid delimiter.").exec()
 
     ### Try to update the time column key
     def update_time_column(self):
@@ -247,7 +257,7 @@ class ReadFileDialog(QDialog):
             self.key_time = int(self.input_timecolumn.text())
         except:
             self.key_time = None
-            print("Invalid time column")
+            ErrorDialog(self, "Invalid time column.").exec()
 
     ### Try to update the data column key
     def update_data_column(self):
@@ -255,15 +265,7 @@ class ReadFileDialog(QDialog):
             self.key_data = int(self.input_datacolumn.text())
         except:
             self.key_data = None
-            print("Invalid data column")
-
-    ### Try to update the starting index
-    def update_start_index(self):
-        try:
-            self.start_index = int(self.input_startindex.text())
-        except:
-            self.start_index = None
-            print("Invalid start index")
+            ErrorDialog(self, "Invalid data column.").exec()
 
     ### Read the first few lines of the file to show a file preview
     def set_file_preview(self):
@@ -285,21 +287,23 @@ class ReadFileDialog(QDialog):
         key_data = None
         key_time = None
         delimiter = None
-        start_index = None
 
         if self.key_data != None:
             key_data = self.key_data
+        else:
+            key_data = 0
 
         if self.key_time != None:
             key_time = self.key_time
+        else:
+            key_data = 1
 
         if self.delimiter != None:
             delimiter = self.delimiter    
+        else:
+            delimiter = ","
 
-        if self.start_index != None:
-            start_index = self.start_index
-
-        self.ydata, self.xdata = read_file_csv_like_native(self.selected_file, key_data=key_data, key_time=key_time, delimiter=delimiter, start_index=start_index)
+        self.ydata, self.xdata = read_file_csv_like_native(self.selected_file, key_data=key_data, key_time=key_time, delimiter=delimiter)
         self.filename = self.selected_file
 
         if len(self.input_samplerate.text()) > 0:
@@ -330,6 +334,7 @@ class MainWindow(QWidget):
         self.framerate = 240  ### Approximate framerate at which to run the main application loop ### Set to zero to update as fast as possible
         self.seconds_per_second = 5 ### The seconds of data to process per second of playback
         self.samples_per_second = 512 ### The amount of samples per second to increment in the live plot ### Make this a slider
+        self.algorithm_delta_ticks = 1
 
         ### Raw data storage
         self.data_raw = []
@@ -353,6 +358,10 @@ class MainWindow(QWidget):
 
         ### GUI
         #region
+
+        ### Stylesheets
+        self.stylesheet_lineedit_valid = "background-color: #FFFFFF;"
+        self.stylesheet_lineedit_invalid = "background-color: #FF0000;"
 
         # Top bar layout
         self.top_layout = QHBoxLayout()
@@ -421,11 +430,6 @@ class MainWindow(QWidget):
         self.menu_view.addAction(self.action_show_signal)
 
         ### Help menu actions
-        self.action_tutorial = QAction("Basic tutorial")
-        self.action_tutorial.setStatusTip("Basic tutorial")
-        self.action_tutorial.triggered.connect(self.show_tutorial)
-        self.menu_help.addAction(self.action_tutorial)
-
         self.action_about = QAction("About")
         self.action_about.setStatusTip("About")
         self.action_about.triggered.connect(self.show_about)
@@ -505,6 +509,11 @@ class MainWindow(QWidget):
         self.analyze_check.checkStateChanged.connect(self.analyze_check_toggled)
         self.algorithm_layout.addWidget(self.analyze_check)
 
+        # Set to defaults
+        self.button_default = QPushButton(text="Default")
+        self.button_default.pressed.connect(self.default_button_pressed)
+        self.algorithm_layout.addWidget(self.button_default)
+
         # SRMAC parameter container
         self.srmac_parameter_layout = QGridLayout()
         self.srmac_parameter_container = QWidget()
@@ -519,33 +528,45 @@ class MainWindow(QWidget):
         self.params_srmac_width = None
 
         # coef_fast, coef_slow, coef_cross, width, threshold
-        self.srmac_coef_fast_slider = QSlider()
-        self.srmac_coef_fast_slider.setOrientation(Qt.Orientation.Horizontal)
-        self.srmac_coef_fast_slider.setRange(0, self.coef_resolution)
-        self.srmac_coef_fast_slider.valueChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_fast"))
-        self.srmac_parameter_layout.addWidget(self.srmac_coef_fast_slider, 0, 0)
+        self.srmac_coef_fast_line_edit = QLineEdit()
+        self.srmac_coef_fast_line_edit_label = QLabel("coef_fast")
+        self.srmac_coef_fast_line_edit.setText("0.0")
+        self.srmac_coef_fast_line_edit.setValidator(QDoubleValidator(0.0, 1.0, 5, notation=QDoubleValidator.Notation.StandardNotation))
+        self.srmac_coef_fast_line_edit.textChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_fast"))
+        self.srmac_parameter_layout.addWidget(self.srmac_coef_fast_line_edit, 0, 0)
+        self.srmac_parameter_layout.addWidget(self.srmac_coef_fast_line_edit_label, 0, 1)
         
-        self.srmac_coef_slow_slider = QSlider()
-        self.srmac_coef_slow_slider.setOrientation(Qt.Orientation.Horizontal)
-        self.srmac_coef_slow_slider.setRange(0, self.coef_resolution)
-        self.srmac_coef_slow_slider.valueChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_slow"))
-        self.srmac_parameter_layout.addWidget(self.srmac_coef_slow_slider, 1, 0)
+        self.srmac_coef_slow_line_edit = QLineEdit()
+        self.srmac_coef_slow_line_edit_label = QLabel("coef_slow")
+        self.srmac_coef_slow_line_edit.setText("0.0")
+        self.srmac_coef_slow_line_edit.setValidator(QDoubleValidator(0.0, 1.0, 5, notation=QDoubleValidator.Notation.StandardNotation))
+        self.srmac_coef_slow_line_edit.textChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_slow"))
+        self.srmac_parameter_layout.addWidget(self.srmac_coef_slow_line_edit, 1, 0)
+        self.srmac_parameter_layout.addWidget(self.srmac_coef_slow_line_edit_label, 1, 1)
 
-        self.srmac_coef_cross_slider = QSlider()
-        self.srmac_coef_cross_slider.setOrientation(Qt.Orientation.Horizontal)
-        self.srmac_coef_cross_slider.setRange(0, self.coef_resolution)
-        self.srmac_coef_cross_slider.valueChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_cross"))
-        self.srmac_parameter_layout.addWidget(self.srmac_coef_cross_slider, 2, 0)
+        self.srmac_coef_cross_line_edit = QLineEdit()
+        self.srmac_coef_cross_line_edit_label = QLabel("coef_cross")
+        self.srmac_coef_cross_line_edit.setText("0.0")
+        self.srmac_coef_cross_line_edit.setValidator(QDoubleValidator(0.0, 1.0, 5, notation=QDoubleValidator.Notation.StandardNotation))
+        self.srmac_coef_cross_line_edit.textChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_cross"))
+        self.srmac_parameter_layout.addWidget(self.srmac_coef_cross_line_edit, 2, 0)
+        self.srmac_parameter_layout.addWidget(self.srmac_coef_cross_line_edit_label, 2, 1)
 
         self.srmac_th_line_edit = QLineEdit()
+        self.srmac_th_line_edit_label = QLabel("threshold")
         self.srmac_th_line_edit.setText("0.0")
+        self.srmac_th_line_edit.setValidator(QDoubleValidator(0.0, 100000000000.0, 20, notation=QDoubleValidator.Notation.StandardNotation))
         self.srmac_th_line_edit.textChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_th"))
         self.srmac_parameter_layout.addWidget(self.srmac_th_line_edit, 3, 0)
+        self.srmac_parameter_layout.addWidget(self.srmac_th_line_edit_label, 3, 1) 
 
         self.srmac_width_line_edit = QLineEdit()
+        self.srmac_width_line_edit_label = QLabel("width")
         self.srmac_width_line_edit.setText("0.5")
+        self.srmac_width_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
         self.srmac_width_line_edit.textChanged.connect(lambda: self.update_srmac_parameters("params_srmac_coef_width"))
         self.srmac_parameter_layout.addWidget(self.srmac_width_line_edit, 4, 0)
+        self.srmac_parameter_layout.addWidget(self.srmac_width_line_edit_label, 4, 1)
 
         # TERMA parameter container
         self.terma_parameter_layout = QGridLayout()
@@ -561,24 +582,36 @@ class MainWindow(QWidget):
 
         # w_1, w_2, b, width
         self.terma_w1_line_edit = QLineEdit()
+        self.terma_w1_line_edit_label = QLabel("window_event")
         self.terma_w1_line_edit.setText("0.0")
+        self.terma_w1_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
         self.terma_w1_line_edit.textChanged.connect(lambda: self.update_terma_parameters("params_terma_w1"))
         self.terma_parameter_layout.addWidget(self.terma_w1_line_edit, 0, 0)
+        self.terma_parameter_layout.addWidget(self.terma_w1_line_edit_label, 0, 1)
 
         self.terma_w2_line_edit = QLineEdit()
+        self.terma_w2_line_edit_label = QLabel("window_cycle")
         self.terma_w2_line_edit.setText("0.0")
+        self.terma_w2_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
         self.terma_w2_line_edit.textChanged.connect(lambda: self.update_terma_parameters("params_terma_w2"))
         self.terma_parameter_layout.addWidget(self.terma_w2_line_edit, 1, 0)
+        self.terma_parameter_layout.addWidget(self.terma_w2_line_edit_label, 1, 1)
 
         self.terma_b_line_edit = QLineEdit()
+        self.terma_b_line_edit_label = QLabel("b_coef")
         self.terma_b_line_edit.setText("0.0")
+        self.terma_b_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
         self.terma_b_line_edit.textChanged.connect(lambda: self.update_terma_parameters("params_terma_b"))
         self.terma_parameter_layout.addWidget(self.terma_b_line_edit, 2, 0)
+        self.terma_parameter_layout.addWidget(self.terma_b_line_edit_label, 2, 1)
 
         self.terma_width_line_edit = QLineEdit()
+        self.terma_width_line_edit_label = QLabel("width")
         self.terma_width_line_edit.setText("0.0")
+        self.terma_width_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
         self.terma_width_line_edit.textChanged.connect(lambda: self.update_terma_parameters("params_terma_width"))
         self.terma_parameter_layout.addWidget(self.terma_width_line_edit, 3, 0)
+        self.terma_parameter_layout.addWidget(self.terma_width_line_edit_label, 3, 1)
 
         # find_peaks parameter container
         self.findpeaks_parameter_layout = QGridLayout()
@@ -594,24 +627,36 @@ class MainWindow(QWidget):
 
         # prominence, heval_ratio, width, proximity
         self.findpeaks_prominence_line_edit = QLineEdit()
+        self.findpeaks_prominence_line_edit_label = QLabel("prominence")
         self.findpeaks_prominence_line_edit.setText("0.0")
-        self.findpeaks_prominence_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.findpeaks_prominence_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
+        self.findpeaks_prominence_line_edit.textChanged.connect(lambda: self.update_findpeaks_parameters("params_findpeaks_prominence"))
         self.findpeaks_parameter_layout.addWidget(self.findpeaks_prominence_line_edit, 0, 0)
+        self.findpeaks_parameter_layout.addWidget(self.findpeaks_prominence_line_edit_label, 0, 1)
 
         self.findpeaks_heval_line_edit = QLineEdit()
+        self.findpeaks_heval_line_edit_label = QLabel("heval_ratio")
         self.findpeaks_heval_line_edit.setText("0.0")
-        self.findpeaks_heval_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.findpeaks_heval_line_edit.setValidator(QDoubleValidator(0.0, 1.0, 5, notation=QDoubleValidator.Notation.StandardNotation))
+        self.findpeaks_heval_line_edit.textChanged.connect(lambda: self.update_findpeaks_parameters("params_findpeaks_heval"))
         self.findpeaks_parameter_layout.addWidget(self.findpeaks_heval_line_edit, 1, 0)
+        self.findpeaks_parameter_layout.addWidget(self.findpeaks_heval_line_edit_label, 1, 1)
 
         self.findpeaks_width_line_edit = QLineEdit()
+        self.findpeaks_width_line_edit_label = QLabel("width")
         self.findpeaks_width_line_edit.setText("0.0")
-        self.findpeaks_width_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.findpeaks_width_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
+        self.findpeaks_width_line_edit.textChanged.connect(lambda: self.update_findpeaks_parameters("params_findpeaks_width"))
         self.findpeaks_parameter_layout.addWidget(self.findpeaks_width_line_edit, 2, 0)
+        self.findpeaks_parameter_layout.addWidget(self.findpeaks_width_line_edit_label, 2, 1)
 
         self.findpeaks_proxim_line_edit = QLineEdit()
+        self.findpeaks_proxim_line_edit_label = QLabel("proximity")
         self.findpeaks_proxim_line_edit.setText("0.0")
-        self.findpeaks_proxim_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.findpeaks_proxim_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
+        self.findpeaks_proxim_line_edit.textChanged.connect(lambda: self.update_findpeaks_parameters("params_findpeaks_proximity"))
         self.findpeaks_parameter_layout.addWidget(self.findpeaks_proxim_line_edit, 3, 0)
+        self.findpeaks_parameter_layout.addWidget(self.findpeaks_proxim_line_edit_label, 3, 1)
 
         # CWToa parameter container
         self.cwtoa_parameter_layout = QGridLayout()
@@ -629,29 +674,44 @@ class MainWindow(QWidget):
 
         # f_min, f_max, scales, width, threshold
         self.cwtoa_fmin_line_edit = QLineEdit()
+        self.cwtoa_fmin_line_edit_label = QLabel("min_freq")
         self.cwtoa_fmin_line_edit.setText("0.0")
-        self.cwtoa_fmin_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.cwtoa_fmin_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
+        self.cwtoa_fmin_line_edit.textChanged.connect(lambda: self.update_cwtoa_parameters("params_cwt_fmin"))
         self.cwtoa_parameter_layout.addWidget(self.cwtoa_fmin_line_edit, 0, 0)
+        self.cwtoa_parameter_layout.addWidget(self.cwtoa_fmin_line_edit_label, 0, 1)
 
         self.cwtoa_fmax_line_edit = QLineEdit()
+        self.cwtoa_fmax_line_edit_label = QLabel("max_freq")
         self.cwtoa_fmax_line_edit.setText("0.0")
-        self.cwtoa_fmax_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.cwtoa_fmax_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
+        self.cwtoa_fmax_line_edit.textChanged.connect(lambda: self.update_cwtoa_parameters("params_cwt_fmax"))
         self.cwtoa_parameter_layout.addWidget(self.cwtoa_fmax_line_edit, 1, 0)
+        self.cwtoa_parameter_layout.addWidget(self.cwtoa_fmax_line_edit_label, 1, 1)
 
         self.cwtoa_scales_line_edit = QLineEdit()
+        self.cwtoa_scales_line_edit_label = QLabel("resolution")
         self.cwtoa_scales_line_edit.setText("0")
-        self.cwtoa_scales_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.cwtoa_scales_line_edit.setValidator(QIntValidator(1, 200))
+        self.cwtoa_scales_line_edit.textChanged.connect(lambda: self.update_cwtoa_parameters("params_cwt_scales"))
         self.cwtoa_parameter_layout.addWidget(self.cwtoa_scales_line_edit, 2, 0)
+        self.cwtoa_parameter_layout.addWidget(self.cwtoa_scales_line_edit_label, 2, 1)
 
         self.cwtoa_width_line_edit = QLineEdit()
+        self.cwtoa_width_line_edit_label = QLabel("width")
         self.cwtoa_width_line_edit.setText("0.0")
-        self.cwtoa_width_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.cwtoa_width_line_edit.setValidator(QDoubleValidator(0.0, 10000.0, 10, notation=QDoubleValidator.Notation.StandardNotation))
+        self.cwtoa_width_line_edit.textChanged.connect(lambda: self.update_cwtoa_parameters("params_cwt_width"))
         self.cwtoa_parameter_layout.addWidget(self.cwtoa_width_line_edit, 3, 0)
+        self.cwtoa_parameter_layout.addWidget(self.cwtoa_width_line_edit_label, 3, 1)
 
         self.cwtoa_th_line_edit = QLineEdit()
+        self.cwtoa_th_line_edit_label = QLabel("threshold")
         self.cwtoa_th_line_edit.setText("0.0")
-        self.cwtoa_th_line_edit.textChanged.connect(self.update_srmac_parameters)
+        self.cwtoa_th_line_edit.setValidator(QDoubleValidator(0.0, 100000000000.0, 20, notation=QDoubleValidator.Notation.StandardNotation))
+        self.cwtoa_th_line_edit.textChanged.connect(lambda: self.update_cwtoa_parameters("params_cwt_th"))
         self.cwtoa_parameter_layout.addWidget(self.cwtoa_th_line_edit, 4, 0)
+        self.cwtoa_parameter_layout.addWidget(self.cwtoa_th_line_edit_label, 4, 1)
 
         #endregion
 
@@ -677,6 +737,17 @@ class MainWindow(QWidget):
         self.menu_edit.setEnabled(False)
         self.progress_bar.setEnabled(False)
         self.algorithm_container.setEnabled(False)
+
+        ### Set all algorithm parameters to default
+        self.algorithm = self.algorithms[0]
+        self.default_button_pressed()
+        self.algorithm = self.algorithms[1]
+        self.default_button_pressed()
+        self.algorithm = self.algorithms[2]
+        self.default_button_pressed()
+        self.algorithm = self.algorithms[3]
+        self.default_button_pressed()
+        self.algorithm = self.algorithms[0]
 
     ### Reset data from the raw arrays and update anything that changes based on data parameters
     def reset_data(self):
@@ -706,6 +777,7 @@ class MainWindow(QWidget):
         ### Update the data timer interval
         self.data_timer.stop()
         self.samples_per_second = int(self.sample_rate * self.seconds_per_second)
+        self.algorithm_delta_ticks = self.sample_rate
         if self.samples_per_second == 0:
             self.data_timer.start(0)
         else:
@@ -718,43 +790,53 @@ class MainWindow(QWidget):
         if param == "params_srmac_coef_fast":
             ### EWMA fast coefficient
             try:
-                if self.srmac_coef_fast_slider.value() is not None:
-                    self.params_srmac_coef_fast = float(self.srmac_coef_fast_slider.value()) / self.coef_resolution
+                if self.srmac_coef_fast_line_edit.text() is not None:
+                    self.params_srmac_coef_fast = float(self.srmac_coef_fast_line_edit.text()) / self.coef_resolution
+                    self.srmac_coef_fast_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC fast coefficient could not be converted to float")
                 self.params_srmac_coef_fast = 0.0508
+                self.srmac_coef_fast_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
         elif param == "params_srmac_coef_slow":
             ### EWMA slow coefficient
             try:
-                if self.srmac_coef_slow_slider.value() is not None:
-                    self.params_srmac_coef_slow = float(self.srmac_coef_slow_slider.value()) / self.coef_resolution
+                if self.srmac_coef_slow_line_edit.text() is not None:
+                    self.params_srmac_coef_slow = float(self.srmac_coef_slow_line_edit.text()) / self.coef_resolution
+                    self.srmac_coef_slow_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC slow coefficient could not be converted to float")
                 self.params_srmac_coef_slow = 0.0103
+                self.srmac_coef_slow_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
         elif param == "params_srmac_coef_cross":
             ### EWMA cross coefficient
             try:
-                if self.srmac_coef_cross_slider.value() is not None:
-                    self.params_srmac_coef_cross = float(self.srmac_coef_cross_slider.value()) / self.coef_resolution
+                if self.srmac_coef_cross_line_edit.text() is not None:
+                    self.params_srmac_coef_cross = float(self.srmac_coef_cross_line_edit.text()) / self.coef_resolution
+                    self.srmac_coef_cross_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC cross coefficient could not be converted to float")
                 self.params_srmac_coef_cross = 0.91
+                self.srmac_coef_cross_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
         elif param == "params_srmac_coef_width":
             ### SRMAC width
             try:
                 if self.srmac_width_line_edit.text() is not None:
                     self.params_srmac_width = float(self.srmac_width_line_edit.text())
+                    self.srmac_width_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC width could not be converted to Float")
                 self.params_srmac_width = 0.5
+                self.srmac_width_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
         elif param == "params_srmac_coef_th":
             ### SRMAC threshold
             try:
                 if self.srmac_th_line_edit.text() is not None:
                     self.params_srmac_th = float(self.srmac_th_line_edit.text())
+                    self.srmac_th_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC threshold could not be converted to Float")
                 self.params_srmac_th = 0
+                self.srmac_th_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
 
     def update_terma_parameters(self, param):
         if param == "params_terma_w1":
@@ -762,39 +844,135 @@ class MainWindow(QWidget):
             try:
                 if self.terma_w1_line_edit.text() is not None:
                     self.params_terma_w1 = float(self.terma_w1_line_edit.text())
+                    self.terma_w1_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: TERMA event window value could not be converted to float")
                 self.params_terma_w1 = 1
+                self.terma_w1_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
         elif param == "params_terma_w2":
             ### Event window/W1
             try:
                 if self.terma_w2_line_edit.text() is not None:
                     self.params_terma_w2 = float(self.terma_w2_line_edit.text())
+                    self.terma_w2_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: TERMA cycle window value could not be converted to float")
                 self.params_terma_w2 = 4
+                self.terma_w2_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
         elif param == "params_terma_width":
             ### EWMA cross coefficient
             try:
                 if self.terma_width_line_edit.text() is not None:
                     self.params_terma_width = float(self.terma_width_line_edit.text())
+                    self.terma_width_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: TERMA width could not be converted to float")
                 self.params_terma_width = 1
+                self.terma_width_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
         elif param == "params_terma_b":
             ### SRMAC width
             try:
                 if self.terma_b_line_edit.text() is not None:
                     self.params_terma_b = float(self.terma_b_line_edit.text())
+                    self.terma_b_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: TERMA b coefficient could not be converted to Float")
                 self.params_terma_b = 0
+                self.terma_b_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
 
     def update_findpeaks_parameters(self, param):
-        print()
+        if param == "params_findpeaks_prominence":
+            ### Prominence
+            try:
+                if self.findpeaks_prominence_line_edit.text() is not None:
+                    self.params_findpeaks_prominence = float(self.findpeaks_prominence_line_edit.text())
+                    self.findpeaks_prominence_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: Find_peaks prominence value could not be converted to float")
+                self.params_findpeaks_prominence = 0.1
+                self.findpeaks_prominence_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
+        elif param == "params_findpeaks_heval":
+            ### Heval
+            try:
+                if self.findpeaks_heval_line_edit.text() is not None:
+                    self.params_findpeaks_heval = float(self.findpeaks_heval_line_edit.text())
+                    self.findpeaks_heval_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: Find_peaks heval value could not be converted to float")
+                self.params_findpeaks_heval = 0.8
+                self.findpeaks_heval_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
+        elif param == "params_findpeaks_width":
+            ### Width
+            try:
+                if self.findpeaks_width_line_edit.text() is not None:
+                    self.params_findpeaks_width = float(self.findpeaks_width_line_edit.text())
+                    self.findpeaks_width_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: Find_peaks width value could not be converted to float")
+                self.params_findpeaks_width = 0.5
+                self.findpeaks_width_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
+        elif param == "params_findpeaks_proximity":
+            ### Proximity
+            try:
+                if self.findpeaks_proxim_line_edit.text() is not None:
+                    self.params_findpeaks_proximity = float(self.findpeaks_proxim_line_edit.text())
+                    self.findpeaks_proxim_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: Find_peaks proximity value could not be converted to float")
+                self.params_findpeaks_proximity = 0.5
+                self.findpeaks_proxim_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
 
     def update_cwtoa_parameters(self, param):
-        print()
+        if param == "params_cwt_fmin":
+            ### Fmin
+            try:
+                if self.cwtoa_fmin_line_edit.text() is not None:
+                    self.params_cwtoa_f_min = float(self.cwtoa_fmin_line_edit.text())
+                    self.cwtoa_fmin_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: CWT minimum frequency value could not be converted to float")
+                self.params_cwtoa_f_min = 0.1
+                self.cwtoa_fmin_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
+        elif param == "params_cwt_fmax":
+            ### Fmax
+            try:
+                if self.cwtoa_fmax_line_edit.text() is not None:
+                    self.params_cwtoa_f_max = float(self.cwtoa_fmax_line_edit.text())
+                    self.cwtoa_fmax_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: CWT maximum frequency value could not be converted to float")
+                self.params_cwtoa_f_max = 1
+                self.cwtoa_fmax_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
+        elif param == "params_cwt_scales":
+            ### Scales
+            try:
+                if self.cwtoa_scales_line_edit.text() is not None:
+                    self.params_cwtoa_scales = int(self.cwtoa_scales_line_edit.text())
+                    self.cwtoa_scales_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: CWT minimum frequency value could not be converted to int")
+                self.params_cwtoa_scales = 3
+                self.cwtoa_scales_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
+        elif param == "params_cwt_width":
+            ### Width
+            try:
+                if self.cwtoa_width_line_edit.text() is not None:
+                    self.params_cwtoa_width = float(self.cwtoa_width_line_edit.text())
+                    self.cwtoa_width_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: CWT minimum frequency value could not be converted to float")
+                self.params_cwtoa_width = 1
+                self.cwtoa_width_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
+        elif param == "params_cwt_th":
+            ### Threshold
+            try:
+                if self.cwtoa_th_line_edit.text() is not None:
+                    self.params_cwtoa_th = float(self.cwtoa_th_line_edit.text())
+                    self.cwtoa_th_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
+            except:
+                print("Error: CWT minimum frequency value could not be converted to float")
+                self.params_cwtoa_th = 0
+                self.cwtoa_th_line_edit.setStyleSheet(self.stylesheet_lineedit_invalid)
 
     ### Wrapper function for calling respiratory rate algorithms
     def run_algorithm(self, data):
@@ -803,13 +981,31 @@ class MainWindow(QWidget):
         elif self.algorithm == "terma":
             rr, peaks = terma(data, self.sample_rate, len(data), window_event=self.params_terma_w1, window_cycle=self.params_terma_w2, b_coef=self.params_terma_b, width=self.params_terma_width)
         elif self.algorithm == "find_peaks":
-            rr, peaks = find_peaks(data, self.sample_rate, len(data))
+            rr, peaks = find_peaks(data, self.sample_rate, len(data), prominence=self.params_findpeaks_prominence, heval_ratio=self.params_findpeaks_heval, width=self.params_findpeaks_width, proximity=self.params_findpeaks_proximity)
         elif self.algorithm == "cwt":
-            rr, peaks = cwt_peaks_oa(data, self.sample_rate, len(data))
+            rr, peaks = cwt_peaks(data, self.sample_rate, len(data), min_freq=self.params_cwtoa_f_min, max_freq=self.params_cwtoa_f_max, resolution=self.params_cwtoa_scales, width=self.params_cwtoa_width, threshold=self.params_cwtoa_th)
         else:
             rr, peaks = 0, []
 
         return rr, peaks
+
+    def algorithm_wrapper(self):
+        ### If analyze is true, run the selected respiratory rate algorithm on this data window
+        if self.analyze:
+            time_window = self.time[self.data_index:self.data_index+self.data_window_size*self.sample_rate]
+            data_window = self.data[self.data_index:self.data_index+self.data_window_size*self.sample_rate]
+
+            rr, peaks = self.run_algorithm(z_norm(data_window))
+
+            ### Show peaks
+            if self.action_show_peaks.isChecked():
+                self.peak_scatter.setData(time_window[peaks], data_window[peaks])
+
+            ### Show respiratory rate
+            #...
+        else:
+            ### Clear peak plot
+            self.peak_scatter.setData([],[])
 
     ### Update the plot and related items
     def update_plot(self):
@@ -831,20 +1027,6 @@ class MainWindow(QWidget):
         ### Update the sample time indicator
         # self.time_indicator_samples.setText(str(round(self.data_index/self.sample_rate, 2))+" / "+str(round(self.max_data_index/self.sample_rate, 2)))
         self.time_indicator_samples.setText(str(self.data_index)+" / "+str(self.max_data_index))
-
-        ### If analyze is true, run the selected respiratory rate algorithm on this data window
-        if self.analyze:
-            rr, peaks = self.run_algorithm(z_norm(data_window))
-
-            ### Show peaks
-            if self.action_show_peaks.isChecked():
-                self.peak_scatter.setData(time_window[peaks], data_window[peaks])
-
-            ### Show respiratory rate
-            #...
-        else:
-            ### Clear peak plot
-            self.peak_scatter.setData([],[])
     
     ### When data is loaded for the first time, enable all features that start disabled
     def enable_widgets(self):
@@ -868,6 +1050,32 @@ class MainWindow(QWidget):
         self.data_index = 0
         self.update_plot()
 
+    def default_button_pressed(self):
+        if self.algorithm == "srmac":
+            self.srmac_coef_fast_line_edit.setText("0.0508")
+            self.srmac_coef_slow_line_edit.setText("0.0103")
+            self.srmac_coef_cross_line_edit.setText("0.91")
+            self.srmac_width_line_edit.setText("0.5")
+            self.srmac_th_line_edit.setText("0")
+        elif self.algorithm == "terma":
+            self.terma_w1_line_edit.setText("1")
+            self.terma_w2_line_edit.setText("4")
+            self.terma_width_line_edit.setText("1")
+            self.terma_b_line_edit.setText("0")
+        elif self.algorithm == "find_peaks":
+            self.findpeaks_prominence_line_edit.setText("0.1")
+            self.findpeaks_heval_line_edit.setText("0.8")
+            self.findpeaks_width_line_edit.setText("0.5")
+            self.findpeaks_proxim_line_edit.setText("0.5")
+        elif self.algorithm == "cwt":
+            self.cwtoa_fmin_line_edit.setText("0.1")
+            self.cwtoa_fmax_line_edit.setText("1")
+            self.cwtoa_scales_line_edit.setText("3")
+            self.cwtoa_width_line_edit.setText("1")
+            self.cwtoa_th_line_edit.setText("0")
+        else:
+            ErrorDialog(self, "Error: invalid algorithm selected").exec()
+
     ### Process analyze checkbox toggle
     def analyze_check_toggled(self):
         if self.analyze_check.isChecked():
@@ -881,16 +1089,22 @@ class MainWindow(QWidget):
         ### Update the data index
         self.data_index = self.progress_bar.value()
 
-        ### Update the plot once
-        self.update_plot()
+        ### Update the plot once, but only if playback is stopped
+        if not self.running:
+            self.update_plot()
+            self.algorithm_wrapper()
 
     ### Change the selected respiratory rate algorithm
     def change_algorithm(self):
         self.algorithm = self.algorithms[self.algselector.currentIndex()]
+
+        ### Hide all algorithm parameter containers
         self.srmac_parameter_container.hide()
         self.terma_parameter_container.hide()
         self.findpeaks_parameter_container.hide()
         self.cwtoa_parameter_container.hide()
+
+        ### Show only the one that has been selected
         if self.algorithm == "srmac":
             self.srmac_parameter_container.show()
         elif self.algorithm == "terma":
@@ -947,10 +1161,10 @@ class MainWindow(QWidget):
         ### If valid pass the selected file to the custom file dialog window for reading data
         selected_file = selected_file[0]
         if len(selected_file) == 0:
-            print("Error: No file selected.")
+            ErrorDialog(self, "Error: No file selected.").exec()
             return
         if selected_file.split(".")[-1] != "csv":
-            print("Error: Incorrect file format.")
+            ErrorDialog(self, "Error: Incorrect file format.").exec()
             return
         else:
             dialog_open_file = ReadFileDialog(self, selected_file)
@@ -959,6 +1173,14 @@ class MainWindow(QWidget):
                 self.data_raw = dialog_open_file.ydata
                 self.time_raw = dialog_open_file.xdata
                 self.sample_rate = dialog_open_file.sample_rate
+
+                ### Validate the data
+                if len(self.data_raw) != len(self.time_raw):
+                    ErrorDialog(self, "Error: data and time arrays are of different sizes.").exec()
+                    return
+                if len(self.data_raw) < self.data_window_size*self.sample_rate:
+                    ErrorDialog(self, "Error: data array too short.").exec()
+                    return
 
                 ### If this is the first file to be loaded, finish GUI initialization
                 if not self.file_loaded:
@@ -1006,10 +1228,14 @@ class MainWindow(QWidget):
                 ### Update plot
                 self.update_plot()
 
+                ### Analyze data to find peaks
+                if self.tick % self.algorithm_delta_ticks == 0:
+                    self.algorithm_wrapper()
+
                 ### Update play button text
                 self.button_play.setText("Pause (Q)")
             except Exception as e:
-                print("Error: "+str(e))
+                ErrorDialog(self, "Error: "+str(e)).exec()
                 self.running = False
         else:
             ### Update play button text
