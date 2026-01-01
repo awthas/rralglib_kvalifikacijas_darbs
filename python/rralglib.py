@@ -551,6 +551,17 @@ def srmac(data, fs, window_size=None, coef_fast=None, coef_slow=None, coef_cross
         width = int(args[4]*fs) if args[4] != -1 else int(0.5*fs)
         margin = int(args[5]*fs) if args[5] != -1 else int(1.0*fs)
 
+    ### Reject invalid coefficients
+    if coef_fast < 0 or coef_fast > 1:
+        return 0, []
+    
+    if coef_slow < 0 or coef_slow > 1:
+        return 0, []
+    
+    if coef_cross < 0 or coef_cross > 1:
+        return 0, []
+
+    ### Process the data array according to the SRMAC filtering routine
     prevdata = data[0]
     prevfast = data[0]
     prevslow = data[0]
@@ -564,6 +575,7 @@ def srmac(data, fs, window_size=None, coef_fast=None, coef_slow=None, coef_cross
         prevcross = (prevfast-prevslow) * coef_cross + prevcross * (1-coef_cross)
         newdata[i] = prevcross
 
+    ### Find peaks using zero crossing
     peak_count, peaks = zero_crossing(newdata, rawdata=data, width=width, fs=fs, margin=margin, th=th)
 
     ### Calculate RR
@@ -620,6 +632,10 @@ def terma(data, fs, window_size=None, window_event=None, window_cycle=None, b_co
         b = args[2] if args[2] != -1 else 0.5
         width = int(args[3]*fs) if args[3] != -1 else int(0.7*fs)
         margin = int(args[4]*fs) if args[4] != -1 else int(1.0*fs)
+
+    ### Reject invalid coefficients
+    if w1 == 0 or w2 == 0:
+        return 0, []
 
     ### Clone input buffer so the input data remains unchanged
     data_ = np.array(data)
@@ -701,12 +717,7 @@ def terma(data, fs, window_size=None, window_event=None, window_cycle=None, b_co
         ev_sum = ev_sum - ev_oldest + ev_newest
         cy_sum = cy_sum - cy_oldest + cy_newest
 
-    # fig, ax = plt.subplots(1,1)
-    # # ax.plot(data_event)
-    # # ax.plot(data_cycle)
-    # ax.plot(data_event-data_cycle, c='r')
-    # plt.show()
-
+    ### Find peaks using zero crossing
     peak_count, peaks = zero_crossing(data=data_, rawdata=data, width=w1, fs=fs, margin=margin, th=0.0)
 
     ### Calculate RR
@@ -1091,7 +1102,6 @@ def cwt_peaks(data, fs, window_size=None, resolution=None, threshold=None, width
     w_t = np.arange(start=-(wavelet_length/2)*fs, stop=(wavelet_length/2)*fs)
 
     ### Pad the input data with zeroes up to len(data) == nearest power of 2
-    ### TODO: formalize this process
     data_len = len(data)
     kern_len = len(w_t)
     size = data_len+kern_len-1
@@ -1105,7 +1115,6 @@ def cwt_peaks(data, fs, window_size=None, resolution=None, threshold=None, width
     data = padn(data, size)
     
     ### For each scale create a discretized and scaled version of the wavelet and perform convolution on the signal
-    ### TODO: as long as the algorithm parameters are unchanged, wavelets(and even their FFTs) do not need be recalculated and could be stored and reused for a slight performance gain
     out = []
     for i, scale in enumerate(scales):
         kernel = []
@@ -1115,7 +1124,7 @@ def cwt_peaks(data, fs, window_size=None, resolution=None, threshold=None, width
         ### Pad the kernel with zeroes to match len(data)
         kernel = padn(kernel, size)
 
-        ### TODO: Overlap-add convolution (is not as good for small fft sizes)
+        ### Convolve
         out.append(ifft(fft(data)*fft(kernel))[int(kern_len/2):data_len+int(kern_len/2)+1]) #
 
     ### Average across scales
