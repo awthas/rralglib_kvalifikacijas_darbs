@@ -103,6 +103,32 @@ class ErrorDialog(QDialog):
     def ok_button_pressed(self):
         self.accept()
 
+### About window
+class AboutDialog(QDialog):
+    def __init__(self, parent):
+        super(AboutDialog, self).__init__(parent=parent)
+
+        self.setWindowTitle("About")
+        self.main_layout = QVBoxLayout(self)
+
+        self.setFixedWidth(300)
+        self.setFixedHeight(200)
+
+        self.header = QLabel("About")
+        self.header.setStyleSheet("font-weight:bold;")
+        self.main_layout.addWidget(self.header)
+
+        self.paragraph = QLabel("The rralglib visualizer is a PyQt6 based Python tool for signal playback and peak detection using some of the algorithms implemented in the Python module of the rralglib library. This tool was created as part of the Qualification Work for the University of Latvia.")
+        self.paragraph.setWordWrap(True)
+        self.main_layout.addWidget(self.paragraph)
+        
+        self.end = QLabel("Author: Toms Racinskis")
+        self.end.setStyleSheet("font-weight:italic; color: #999999;")
+        self.main_layout.addWidget(self.end)
+
+    def ok_button_pressed(self):
+        self.accept()
+
 ### Read file dialog window
 class ReadFileDialog(QDialog):
     def __init__(self, parent, selected_file):
@@ -142,10 +168,8 @@ class ReadFileDialog(QDialog):
         self.main_layout.addWidget(self.selection_label)
 
         ### Selected file preview
-        self.set_file_preview()
         self.selection_preview = QTextEdit()
         self.selection_preview.setDisabled(True)
-        self.selection_preview.setText(self.file_preview)
         self.main_layout.addWidget(self.selection_preview)
 
         ### Input frame
@@ -232,6 +256,9 @@ class ReadFileDialog(QDialog):
         self.button_confirm.pressed.connect(self.confirm_button_pressed)
         self.bottom_layout.addWidget(self.button_confirm)
 
+        ### Set file preview
+        self.set_file_preview()
+
     ### Try to update the sample rate
     def update_sample_rate(self):
         try:
@@ -269,13 +296,16 @@ class ReadFileDialog(QDialog):
 
     ### Read the first few lines of the file to show a file preview
     def set_file_preview(self):
-        with open(self.selected_file, encoding="utf-8") as file:
-            for i, line in enumerate(file):
-                if i > self.preview_length:
-                    self.file_preview += "..."
-                    break
-                self.file_preview += line
-        return
+        try:
+            with open(self.selected_file, encoding="utf-8") as file:
+                for i, line in enumerate(file):
+                    if i > self.preview_length:
+                        self.file_preview += "..."
+                        break
+                    self.file_preview += line
+            self.selection_preview.setText(self.file_preview)
+        except Exception as e:
+            self.selection_preview.setText("Could not open the selected file. ["+str(e)+"]")
 
     ### Cancel this dialog
     def cancel_button_pressed(self):
@@ -303,18 +333,23 @@ class ReadFileDialog(QDialog):
         else:
             delimiter = ","
 
-        self.ydata, self.xdata = read_file_csv_like_native(self.selected_file, key_data=key_data, key_time=key_time, delimiter=delimiter)
-        self.filename = self.selected_file
+        try:
+            self.ydata, self.xdata = read_file_csv_like_native(self.selected_file, key_data=key_data, key_time=key_time, delimiter=delimiter)
+            self.filename = self.selected_file
 
-        if len(self.input_samplerate.text()) > 0:
-            self.sample_rate = int(self.input_samplerate.text())
+            if len(self.input_samplerate.text()) > 0:
+                self.sample_rate = int(self.input_samplerate.text())
 
-        if self.sample_rate is None:
-            if len(self.xdata) > 1:
-                self.sample_rate = int(1.0 / self.xdata[1]-self.xdata[0])
+            if self.sample_rate is None:
+                if len(self.xdata) > 1:
+                    self.sample_rate = int(1.0 / self.xdata[1]-self.xdata[0])
 
-        self.accept()
-        self.close()
+            self.accept()
+            self.close()
+        except Exception as e:
+            ErrorDialog(self, "Could not open the selected file. ["+str(e)+"]").exec()
+            self.reject()
+            self.close()
 
 ### The main program window
 class MainWindow(QWidget):
@@ -1143,13 +1178,11 @@ class MainWindow(QWidget):
         else:
             self.plot_signal.hide()
 
-    ### Show a basic explanation about the application
-    def show_tutorial(self):
-        print("Error: Unimplemented")
-
     ### Show general info about the application
     def show_about(self):
-        print("Error: Unimplemented")
+        if self.running():
+            self.play_button_pressed()
+        AboutDialog(self).exec()
 
     ### Open the dialog for opening a new file
     def button_open_new_file(self):
