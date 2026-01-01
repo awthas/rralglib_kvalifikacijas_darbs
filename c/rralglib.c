@@ -21,13 +21,12 @@ int32_t rral_mul32(int32_t a, int32_t b){
 	return ((int64_t)a*(int64_t)b) >> FIXED_POINT;
 }
 
+// UNFINISHED MUL64 FUNCTION
 // uint64_t rral_mul64(uint64_t a, uint64_t b){ //https://stackoverflow.com/a/58381061
 // 	uint64_t lo_lo = (a & 0xFFFFFFFF) * (b & 0xFFFFFFFF);
 // 	uint64_t hi_lo = (a & 0xFFFFFFFF) * (b & 0xFFFFFFFF);
 // 	uint64_t lo_hi = (a & 0xFFFFFFFF) * (b & 0xFFFFFFFF);
 // 	uint64_t hi_hi = (a & 0xFFFFFFFF) * (b & 0xFFFFFFFF);
-
-
 // 	return ((int64_t)a*(int64_t)b) >> FIXED_POINT;
 // }
 
@@ -71,8 +70,8 @@ int32_t sqrt64f(int64_t a){
 
 // Biquad IIR filter function(sos coefs should have a[0] normalized to 1.0)
 int32_t rral_sosfilt(int32_t* data, uint16_t dataLen, int32_t* sos, int32_t sections, int32_t* x, int32_t* y){
-	if(dataLen <= 0){ return 1;}
-	if(sections <= 0){ return 1;}
+	if(dataLen <= 0){ return RRAL_ERR;}
+	if(sections <= 0){ return RRAL_ERR;}
 	
 	// Buffers
 	int32_t b[3];
@@ -109,38 +108,14 @@ int32_t rral_sosfilt(int32_t* data, uint16_t dataLen, int32_t* sos, int32_t sect
 		}
 	}
 
-	return 0;
-}
-
-// Z-score normalization for integer data // DEPRECATED, naive algorithm is bad to use in practice
-void rral_znorm_int(int32_t* data, uint16_t dataLen){
-// Calculate the standard deviation and the mean
-	int64_t sum = 0;
-	int64_t sumSq = 0;
-	for(int32_t i = 0; i < dataLen; i++){
-		sum += data[i];						// Sum
-		sumSq += data[i]*data[i];	// Sum of squares
-	}
-	int32_t mean = sum/dataLen;
-	sum = sumSq-((sum*sum)/dataLen);
-	sum = sum/(dataLen-1);	// Variance
-	float std = sqrtf(sum);	// Standard deviation
-	
-	// Normalize data and convert it to fixed point format
-
-	int32_t std_int = rral_float_to_fixed(std);
-	mean = rral_int_to_fixed(mean);
-
-	for(uint16_t i = 0; i < dataLen; i++){
-		data[i] = rral_div32((int32_t)(((int64_t)rral_int_to_fixed(data[i])) - ((int64_t)mean)), std_int);
-	}
+	return RRAL_OK;
 }
 
 // Mean and standard deviation calculation function using the two-pass algorithm
 int32_t rral_mean_and_sdev(int32_t* data, uint16_t dataLen, int32_t* mean, int32_t* stdev){
-	if(dataLen <= 1){ return 1; }
-	if(mean == NULL){ return 1; }
-	if(stdev == NULL){ return 1; }
+	if(dataLen <= 1){ return RRAL_ERR; }
+	if(mean == NULL){ return RRAL_ERR; }
+	if(stdev == NULL){ return RRAL_ERR; }
 
 	// Calculate the mean
 	int64_t meanAcc = 0;
@@ -169,13 +144,13 @@ int32_t rral_mean_and_sdev(int32_t* data, uint16_t dataLen, int32_t* mean, int32
 	d_stdev = sqrt(d_stdev);
 	*stdev = (int32_t)((float)d_stdev * (float)(1 << FIXED_POINT) + (d_stdev >= 0 ? 0.5 : -0.5));
 		
-	return 0;
+	return RRAL_OK;
 }
 
 int32_t rral_mean_and_sdev_float(int32_t* data, uint16_t dataLen, int32_t* mean, int32_t* sdev){
-	if(dataLen <= 1){ return 1; }
-	if(mean == NULL){ return 1; }
-	if(sdev == NULL){ return 1; }
+	if(dataLen <= 1){ return RRAL_ERR; }
+	if(mean == NULL){ return RRAL_ERR; }
+	if(sdev == NULL){ return RRAL_ERR; }
 
 	// Calculate the mean
 	int64_t meanAcc = 0;
@@ -198,13 +173,12 @@ int32_t rral_mean_and_sdev_float(int32_t* data, uint16_t dataLen, int32_t* mean,
 	sumOfSquares = sqrtf(sumOfSquares);
 	*sdev = rral_float_to_fixed(sumOfSquares);
 		
-	return 0;
+	return RRAL_OK;
 }
 
-
 // Local maxima detection without an order parameter
-uint16_t rral_local_maxima_fast(uint16_t* peaks, uint16_t peaksLen, int32_t* data, uint16_t dataLen) {
-	if (dataLen == 0) { return 1; }
+int32_t rral_local_maxima_fast(uint16_t* peaks, uint16_t peaksLen, int32_t* data, uint16_t dataLen) {
+	if (dataLen == 0) { return RRAL_ERR; }
 
 	int32_t lastY = -2147483648;
 	uint16_t ind = 0;
@@ -218,7 +192,7 @@ uint16_t rral_local_maxima_fast(uint16_t* peaks, uint16_t peaksLen, int32_t* dat
 		// If this is a local maxima add it to the peaks buffer
 		if (data[i - 1] <= data[i] && data[i + 1] <= data[i]) {
 			peaks[ind] = i;
-			if (ind + 1 < peaksLen - 1) { ind++; }
+			if (ind + 1 < peaksLen) { ind++; }
 		}
 	}
 	return ind;
@@ -280,9 +254,9 @@ int32_t rral_arr_max(int32_t* data, uint16_t dataLen, uint16_t left_bound, uint1
 }
 
 // The optimized version of peak prominence filtering
-uint8_t rral_remove_by_prominence(uint16_t* peaks, uint16_t peaksLen, uint16_t peakCount, int32_t* data, uint16_t dataLen, int32_t pkProm, int32_t pkHeval, int32_t pkWidth) {
-	if (peakCount == 0) { return 1; }
-	if (dataLen == 0) { return 1; }
+int32_t rral_remove_by_prominence(uint16_t* peaks, uint16_t peaksLen, uint16_t peakCount, int32_t* data, uint16_t dataLen, int32_t pkProm, int32_t pkHeval, int32_t pkWidth) {
+	if (peakCount == 0) { return RRAL_ERR; }
+	if (dataLen == 0) { return RRAL_ERR; }
 	if (peakCount >= peaksLen) { peakCount = peaksLen - 1; }
 
 	// The last bit of a peaks index is used as a flag for whether the peak is to be removed after this routine is complete
@@ -382,13 +356,12 @@ uint8_t rral_remove_by_prominence(uint16_t* peaks, uint16_t peaksLen, uint16_t p
 		if ((peaks[i] & 0x8000) != 0) { peaks[i] = 0; }
 	}
 
-	return 0;
+	return RRAL_OK;
 }
 
 // Filter peaks based on proximity // TODO: mark as static?
-uint8_t rral_remove_close_peaks(uint16_t* peaks, uint16_t peaksLen, int16_t peakCount, int32_t* data, uint16_t dataLen, int32_t dist){
-	if(peakCount == 0){ return 1;}
-
+int32_t rral_remove_close_peaks(uint16_t* peaks, uint16_t peaksLen, int16_t peakCount, int32_t* data, uint16_t dataLen, int32_t dist){
+	if(peakCount == 0){ return RRAL_ERR;}
 	if(peakCount >= peaksLen){peakCount = peaksLen-1;}
 
 	for(uint16_t i = 0; i < peakCount; i++){
@@ -407,11 +380,14 @@ uint8_t rral_remove_close_peaks(uint16_t* peaks, uint16_t peaksLen, int16_t peak
 			}
 		}
 	}
-	return 0;
+	return RRAL_OK;
 }
 
 // find_peaks algorithm
-uint16_t rral_find_peaks(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint16_t peaksLen, Params_findpeaks_t* params) {
+int32_t rral_find_peaks(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint16_t peaksLen, Params_findpeaks_t* params) {
+	if(data == NULL){return RRAL_ERR;}
+	if(peaks == NULL){return RRAL_ERR;}
+	if(params == NULL){return RRAL_ERR;}
 
 	// Initialize peak array
 	for (uint16_t i = 0; i < peaksLen; i++) {
@@ -426,18 +402,19 @@ uint16_t rral_find_peaks(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint1
 
 	// Filter peaks based on their prominence and width
 	ret = rral_remove_by_prominence(peaks, peaksLen, peakCount, data, dataLen, params->pkProm, params->pkHeval, params->pkWidth);
-	if (ret) { return -1; }
+	if (ret == RRAL_ERR) { return RRAL_ERR; }
 
 	// Remove peaks that are too close together(lowest ones removed first)
 	ret = rral_remove_close_peaks(peaks, peaksLen, peakCount, data, dataLen, params->pkProxim);
-	if (ret) { return -1; }
+	if (ret == RRAL_ERR) { return RRAL_ERR; }
 
 	// Shift all peaks left to remove any blank space in the buffer
 	peakCount = 0;
 	uint16_t empty = 0;
 	for (uint16_t i = 0; i < peaksLen; i++) {
 		if (peaks[i] == 0) { empty++; }
-		else { peaks[i - empty] = peaks[i]; peaks[i] = 0; peakCount++; }
+		else if(i - empty != i){ peaks[i - empty] = peaks[i]; peaks[i] = 0; peakCount++; }
+		else{ peakCount++; }
 	}
 
 	return peakCount;
@@ -445,9 +422,10 @@ uint16_t rral_find_peaks(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint1
 
 // TERMA algorithm
 int32_t rral_terma(int32_t* data, uint16_t dataLen, int32_t bCoef){
-	if(EVENT_BUF_SIZE >= dataLen){return -1;}
-	if(CYCLE_BUF_SIZE >= dataLen){return -1;}
-	if(dataLen <= 0){return -1;}
+	if(data == NULL){return RRAL_ERR;}
+	if(EVENT_BUF_SIZE >= dataLen){return RRAL_ERR;}
+	if(CYCLE_BUF_SIZE >= dataLen){return RRAL_ERR;}
+	if(dataLen <= 0){return RRAL_ERR;}
 	
 	// Event circular buffer
 	int32_t circBufEvent[EVENT_BUF_SIZE];
@@ -534,12 +512,14 @@ int32_t rral_terma(int32_t* data, uint16_t dataLen, int32_t bCoef){
 		cycleSum = cycleSum - cyOldest + cyNewest;
 	}
 
-	return 0;
+	return RRAL_OK;
 }
 
 // SRMAC algorithm
 int32_t rral_srmac(int32_t* data, uint16_t dataLen, Params_srmac_t params, State_srmac_t *state) {
-	if (dataLen <= 0) { return -1; }
+	if(data == NULL){return RRAL_ERR;}
+	if(state == NULL){return RRAL_ERR;}
+	if (dataLen <= 0) { return RRAL_ERR; }
 
 	// State variables
 	int64_t fast = 0;
@@ -579,13 +559,14 @@ int32_t rral_srmac(int32_t* data, uint16_t dataLen, Params_srmac_t params, State
 		state->prevCross = cross;
 	}
 
-	return 0;
+	return RRAL_OK;
 }
 
 // Find peaks in zero-crossing data
 int32_t rral_zero_crossing(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint16_t peaksLen, int32_t width, int32_t th){
-	if (dataLen <= 0) { return -1;}
-	if (data == NULL) { return -1;}
+	if (dataLen <= 0) { return RRAL_ERR;}
+	if (data == NULL) { return RRAL_ERR;}
+	if (peaks == NULL) { return RRAL_ERR;}
 
 	uint16_t count = 0;
 	int32_t positive = 0;
@@ -602,7 +583,7 @@ int32_t rral_zero_crossing(int32_t* data, uint16_t dataLen, uint16_t* peaks, uin
 			}
 		}else{ // Negative edge
 			if(positive >= width){ // Real peak detected
-				peaks[count] = i-distToPeak;
+				peaks[count] = i-distToPeak-1;
 				count++;
 				if(count >= peaksLen){count = 0;}
 			}
@@ -616,9 +597,10 @@ int32_t rral_zero_crossing(int32_t* data, uint16_t dataLen, uint16_t* peaks, uin
 
 // Find peaks in zero-crossing data with peak maxima taken from raw unfiltered data
 int32_t rral_zero_crossing_raw(int32_t* data, int32_t* rawData, uint16_t dataLen, uint16_t* peaks, uint16_t peaksLen, int32_t width, int32_t th){
-	if (dataLen <= 0) { return -1;}
-	if (data == NULL) { return -1;}
-	if (rawData == NULL) { return -1;}
+	if (dataLen <= 0) { return RRAL_ERR;}
+	if (data == NULL) { return RRAL_ERR;}
+	if (peaks == NULL) { return RRAL_ERR;}
+	if (rawData == NULL) { return RRAL_ERR;}
 
 	uint16_t count = 0;
 	int32_t positive = 0;
@@ -635,7 +617,7 @@ int32_t rral_zero_crossing_raw(int32_t* data, int32_t* rawData, uint16_t dataLen
 			}
 		}else{ // Negative edge
 			if(positive >= width){ // Real peak detected
-				peaks[count] = i-distToPeak;
+				peaks[count] = i-distToPeak-1;
 				count++;
 				if(count >= peaksLen){count = 0;}
 			}
@@ -647,87 +629,10 @@ int32_t rral_zero_crossing_raw(int32_t* data, int32_t* rawData, uint16_t dataLen
 	return count;
 }
 
-// Function for finding the approximate respiration window size from breath indices
-uint16_t rral_get_respiration_window(uint16_t* peaks, uint16_t breathsInWindow){
-	if(breathsInWindow <= 1){ return 0; }
-
-	int16_t first = peaks[0];
-	int16_t last = peaks[breathsInWindow-1];
-
-	// Loop for calculating the average distance between breaths // TODO: Eventually replace with a function to calculate the distances and overwrite peak values with them
-	int32_t avgDistance = 0;
-	for(uint16_t i = 0; i < breathsInWindow-1; i++){
-		avgDistance = ((avgDistance * i) + (peaks[i+1]-peaks[i])) / (i+1);
-	}
-
-	// Calculate the respiratory window size
-	first = first - avgDistance/2;
-	last = last + avgDistance/2;
-	int16_t windowSizeSamples = last - first;
-
-	// Clamp window size to a minimum value
-	if(last < ((SAMPLE_RATE * DATA_WINDOW) - (RRAL_BREATH_WIDTH * SAMPLE_RATE))){ // If no breathing is detected for an extended period of time, clamp earlier
-		if(windowSizeSamples < ((SAMPLE_RATE * DATA_WINDOW) - (RRAL_BREATH_WIDTH * SAMPLE_RATE))) {windowSizeSamples = ((SAMPLE_RATE * DATA_WINDOW) - (RRAL_BREATH_WIDTH * SAMPLE_RATE)); }
-	}else{
-		if(windowSizeSamples < (SAMPLE_RATE * DATA_WINDOW) / 2) {windowSizeSamples = (SAMPLE_RATE * DATA_WINDOW) / 2; }
-	}
-
-	return windowSizeSamples;
-}
-
-// Function to calculate an accurate respiratory rate from peak indices // Returns a fixed point number
-int32_t rral_get_rr(uint16_t* peaks, uint16_t peakCount){
-	if(peakCount <= 1){ return 0; }
-
-	int32_t windowSizeSamples = 0;
-	int32_t windowTimeS = 0;
-	int32_t rr = 0;
-
-	// Find the approximate data window
-	// If the DATA_WINDOW value is used to calculate the respiratory rate instead, results are much more inaccurate and unstable as they reflect the fact that breaths near the edges are oft. missed
-	windowSizeSamples = rral_get_respiration_window(peaks, peakCount); 
-
-	// Calculate RR
-	windowTimeS = rral_div32(rral_int_to_fixed(windowSizeSamples), rral_int_to_fixed(SAMPLE_RATE));
-	if(windowTimeS == 0){ return 0; }
-	rr = rral_mul32(rral_div32(rral_int_to_fixed(60), windowTimeS), rral_int_to_fixed(peakCount));
-
-	return rr;
-}
-
-int32_t rral_get_dist(uint16_t* peaks, uint16_t peakCount){
-	if(peakCount <= 1){ return 0; }
-
-	int16_t first = peaks[0];
-	int16_t last = peaks[peakCount-1];
-
-	// Loop for calculating the average distance between peaks
-	int32_t dist = 0;
-	int32_t temp = 0;
-	for(uint16_t i = 0; i < peakCount-1; i++){
-		temp = (peaks[i+1]-peaks[i]);
-		dist = ((dist * i) + temp) / (i+1);
-	}
-
-	return dist;
-}
-
-// More efficient method for respiratory rate calculation; by default is slow to react to a pause in respiration so maybe shouldn't be used as-is
-int32_t rral_get_rr_dist(uint16_t* peaks, uint16_t peakCount){
-	if(peakCount <= 2){ return 0; }
-
-	// More precise results might be able to be acquired by performing a check on the previous peaks and adjusting them if they've drifted due to phase shifts
-
-	int32_t rr = 0;
-	rr = peaks[peakCount-1]-peaks[0];
-	rr = rral_div32(rral_int_to_fixed(rr), rral_int_to_fixed(peakCount-1));
-	rr = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), rr);
-
-	return rr;
-}
-
-// Neighbour running covariance SQI method
+// Neighbour running covariance SQI method - returns the window Pearson coefficient
 int32_t rral_get_sqi_lite(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint16_t peakCount, int32_t mindist, int32_t maxdist){
+	if(data == NULL){return RRAL_ERR;}
+	if(peaks == NULL){return RRAL_ERR;}
 	if(peakCount < 2){ return 0; }
 
 	// Calculate the average distance between peaks
@@ -742,9 +647,7 @@ int32_t rral_get_sqi_lite(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 	for(int32_t i = 0; i < peakCount-1; i++){
 
 		int32_t halfdist = dist / 2;
-		// if(peaks[i] < halfdist){ halfdist = peaks[i];}
-		// if(dataLen-peaks[i+1] < halfdist){ halfdist = dataLen-peaks[i+1];}
-		// if(halfdist < SAMPLE_RATE / 4){ inv++; continue; }
+
 		if(peaks[i] < halfdist){ inv++; continue;}
 		if(dataLen-peaks[i+1] < halfdist){ inv++; continue;}
 		if(halfdist < SAMPLE_RATE / 4){ inv++; continue; }
@@ -797,7 +700,17 @@ int32_t rral_get_sqi_lite(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 		vary /= (n-1);
 
 		if(varx != 0 && vary != 0){
-			cov = (cov << FIXED_POINT) / ((varx+vary)/2); // if we assume that varx ~= vary then sqrt(varx*vary) ~= (varx+vary)/2 (very rough approx. for now because there are bigger problems at hand)
+			// cov = (cov << FIXED_POINT) / ((varx+vary)/2); // if we assume that varx ~= vary then sqrt(varx*vary) ~= (varx+vary)/2 (very rough approx. that saves time)
+			// coefs += cov;
+			// coefsN++;
+
+			// Accurate coefficient using double math
+			int64_t prod = 0;
+			double d_prod = (double)varx / (float)(1 << FIXED_POINT);
+			d_prod *= (double)vary / (float)(1 << FIXED_POINT);
+			d_prod = sqrt(d_prod);
+			prod = (int64_t)(d_prod * (double)(1 << FIXED_POINT) + (d_prod >= 0 ? 0.5 : -0.5));
+			cov = (cov << FIXED_POINT) / prod;
 			coefs += cov;
 			coefsN++;
 		}
@@ -808,55 +721,82 @@ int32_t rral_get_sqi_lite(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 	}
 
 	if(coefsN == 0){
-		return -1;
+		return RRAL_ERR;
 	}
 
 	return coefs / coefsN;
 }
 
-// Full SQI method
+// Full SQI method - returns the window Pearson coefficient
 int32_t rral_get_sqi_full(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint16_t peakCount){
-
-	// Calculate the average distance between peaks
+	if(data == NULL){return RRAL_ERR;}
+	if(peaks == NULL){return RRAL_ERR;}
+	
+	// Calculate the median distance between peaks
 	int32_t dist = 0;
 	if(peakCount < 2){ return 0; }
-	else if(peakCount < 3){
-		dist = peaks[0];
-		if(dist > dataLen-peaks[1]){dist = dataLen-peaks[1];}
-	}else{
+	else{
 		dist = (peaks[peakCount-1]-peaks[0]) / (peakCount - 1);
 	}
 	if(dist % 2 != 0){ dist++; }
-	if(dist >= SAMPLE_RATE * DATA_WINDOW/2){ dist = (SAMPLE_RATE * DATA_WINDOW/4);}
-	if(dist % 2 != 0){ dist++; }
 
+	// Are < 15% of the breath durations > 1.5 or < 0.5 times the median breath duration?
+	int32_t pn = 0;
+	for(uint16_t i = 0; i < peakCount-1; i++){
+		int32_t tdist = peaks[i+1] - peaks[i];
+		if(tdist > ((dist * 3) / 2) || tdist < (dist / 2)){
+			pn++;
+		}
+	}
+	// e.g if pn / peakcount > 0.15 return 0
+
+	// Is the normalized standard deviation of breath durations < 0.25
+
+
+
+	// Calculate the correlation coefficient
+
+	// Aux
 	int32_t pattern[SAMPLE_RATE * DATA_WINDOW/2];
 	int32_t halfdist = dist/2;
-	int32_t pn = 0;
 	int16_t fst = -1;
+	pn = 0;
 
 	// Zero out the pattern buffer
 	for(uint16_t i = 0; i < dist; i++){
 		pattern[i] = 0;
 	}
 
+	// Find first usable peak // Used when not using zero-padding
 	for(uint16_t i = 0; i < peakCount; i++){
 		if(peaks[i] < halfdist || halfdist > dataLen-peaks[i]){ continue; }
 		if(fst == -1){fst = i;}
 		pn++;
 	}
 
+	// These are the initial variables for the zero-padding version
+	fst = 0;
+	pn = peakCount;
+	uint16_t idx = 0;
+
 	// Calculate the average pattern
 	for(uint16_t i = 0; i < dist; i++){
 		int64_t temp = 0;
 		for(uint16_t j = fst; j < pn; j++){
-			temp += data[peaks[fst+j]-halfdist+i];
+			// temp += data[peaks[fst+j]-halfdist+i]; // Previous version - I think this is wrong but not 100% sure so leaving it in
+
+			// Zero-padding when peaks are too close to the edge
+			idx = peaks[j]-halfdist+i;
+			if(idx >= 0 && idx < dataLen){
+				temp += data[peaks[j]-halfdist+i];
+			}
 		}
 		pattern[i] = temp / pn;
 	}
 
 	// For each peak calculate the Pearson correlation coefficient with the average pattern
-	// OPTIMIZATIONS: the mean of the pattern does not need to be recalculated every time; neither does vary; get rid of double math;
+	// OPTIMIZATION: the mean of the pattern does not need to be recalculated every time; neither does vary; get rid of double math;
+	// OPTIMIZATION: zero-padding increases computational load but can be mitigated by performing a check before each for loop and applying a loop without an if statement if peak is within the bounds
 	int64_t coefs = 0;
 	int32_t validCoefs = 0;
 	int32_t inv = 0;
@@ -874,7 +814,10 @@ int32_t rral_get_sqi_full(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 
 		// First pass to get the mean values
 		for(int32_t j = -halfdist; j < halfdist; j++){
-			meanx += fst[j];
+			// Zero-padding when peaks are too close to the edge
+			if(peaks[i]+j >= 0 && peaks[i]+j < dataLen){
+				meanx += fst[j];
+			}
 			meany += snd[j];
 		}
 		meanx /= dist;
@@ -883,7 +826,10 @@ int32_t rral_get_sqi_full(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 		// Second pass for live calculation
 		int8_t scale = 0;
 		for(int32_t j = -halfdist; j < halfdist; j++){
-			dx = fst[j] - meanx;
+			// Zero-padding when peaks are too close to the edge
+			if(peaks[i]+j >= 0 && peaks[i]+j < dataLen){
+				dx = fst[j] - meanx;
+			}
 			dy = snd[j] - meany;
 
 			dx >>= scale;
@@ -923,248 +869,302 @@ int32_t rral_get_sqi_full(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 	}
 
 	if(validCoefs == 0){
-		return -1;
+		return RRAL_ERR;
 	}
 
 	return coefs / validCoefs;
 }
 
-// SQI using peak-to-peak correlation
-int32_t rral_get_sqi_corr(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint16_t peakCount){
-	if(peakCount < 2){ return rral_float_to_fixed(-0.1f); }
+// Zero-init single parameter state structs
+int32_t rral_single_param_state_init(State_joint_t* stateJ, State_peaks_t* state){
+	if(stateJ == NULL){return RRAL_ERR;}
+	if(state == NULL){return RRAL_ERR;}
 
-	// Calculate average distance between peaks // For cardiac events, can also perform a simple maximum distance check as a quick heuristic
-	int32_t dist = 0;
-	for(uint16_t i = 0; i < peakCount-1; i++){
-		dist += peaks[i+1] - peaks[i];
-	}
-	dist = dist / (peakCount - 1);
-	if(dist % 2 != 0){ dist++; }
-	int32_t halfdist = dist / 2;
-
-	// Flag peaks which are too close to the edges
-	for(uint16_t i = 0; i < peakCount; i++){
-		if(peaks[i] < halfdist || peaks[i] >= dataLen - halfdist){
-			peaks[i] |= 0x8000;
-		}
+	// Init data buffers
+	for(int32_t i = 0; i < MAIN_BUF_SIZE; i++){
+		state->data[i] = 0;
 	}
 
-	int32_t aMean = 0;
-	int32_t aSdev = 0;
-	int64_t aDelta = 0;
-	int32_t bMean = 0;
-	int32_t bSdev = 0;
-	int64_t bDelta = 0;
-	int64_t corSum = 0;
-	int64_t sdevProd = 0;
-	int64_t avgCoef = 0;
-	int16_t cN = 0;
-	int32_t fst = -1;
-
-	// Calculate the mean and sdev of the first valid peak
-	for(int32_t i = 0; i < peakCount-1; i++){
-		if((peaks[i] & 0x8000) == 0x0000){
-			rral_mean_and_sdev(&data[peaks[i] - halfdist], dist, &aMean, &aSdev);	
-
-			int64_t meanAcc = 0;
-			for(int32_t j = 0; j < dist; j++){
-				meanAcc += data[peaks[i]-halfdist+j];
-			}
-			aMean = meanAcc / dist;
-
-
-			fst = i;
-			break;
-		}
+	// Init peak buffer
+	for(int32_t i = 0; i < MAX_PEAK_COUNT; i++){
+		state->peaks[i] = 0;
 	}
 
-	if(fst == -1){
-		return rral_float_to_fixed(-0.1f);
+	// Init SRMAC states
+	state->srmacState.prevFast = 0;
+	state->srmacState.prevSlow = 0;
+	state->srmacState.prevCross = 0;
+
+	// Init filter state buffers
+	for(int32_t i = 0; i < 3*SOS_SECT; i++){
+		state->hpfx[i] = 0;
+		state->hpfy[i] = 0;
+		state->lpfx[i] = 0;
+		state->lpfy[i] = 0;
 	}
 
-	return aMean;
+	// Init running values
+	state->deltaSampleCount = 0;
+	stateJ->deltaSampleCount = 0;
+	stateJ->totalSampleCount = 0;
+	stateJ->runningMeanSum = 0;
+	stateJ->runningMean = 0;
 
-	// Go through peaks in pairs
-	for(int32_t i = fst; i < peakCount-1; i++){
-		if((peaks[i+1] & 0x8000) != 0x0000){ break; }
-		
-		bMean = 0;
-		bSdev = 0;
-		rral_mean_and_sdev(&data[peaks[i+1] - halfdist], dist, &bMean, &bSdev);	
-		
-		// The product of both standard deviations
-		if(aSdev == 0 || bSdev == 0){ continue; }
-		sdevProd = ((int64_t)aSdev * bSdev) >> FIXED_POINT;
+	return RRAL_OK;
+}
 
-		// Calculate the correlation between peak segment 1 and 2
-		corSum = 0;
-		for(int32_t j = -halfdist; j < halfdist; j++){
-			aDelta = ((int64_t)data[peaks[i] + j] - aMean);
-			bDelta = ((int64_t)data[peaks[i+1] + j] - bMean);
-			bDelta = (aDelta * bDelta) >> FIXED_POINT;
-			corSum += bDelta;
-		}
+// Zero-init joint hr/rr state structs
+int32_t rral_joint_hr_rr_state_init(State_joint_t* stateJ, State_peaks_t* stateHR, State_peaks_t* stateRR){
+	if(stateJ == NULL){return RRAL_ERR;}
+	if(stateHR == NULL){return RRAL_ERR;}
+	if(stateRR == NULL){return RRAL_ERR;}
 
-		// Pearson correlation coefficient
-		corSum = corSum / (dist - 1);
-		avgCoef += (corSum << FIXED_POINT) / sdevProd;
-		cN++;
-
-		// Reuse mean and sdev
-		aMean = bMean;
-		aSdev = bSdev;
+	// Init data buffers
+	for(int32_t i = 0; i < MAIN_BUF_SIZE; i++){
+		stateHR->data[i] = 0;
+		stateRR->data[i] = 0;
 	}
 
-	// Average Pearson correlation coefficient for all neighboring peaks
-	if(cN != 0){
-		avgCoef = avgCoef / cN;
+	// Init peak buffer
+	for(int32_t i = 0; i < MAX_PEAK_COUNT; i++){
+		stateHR->peaks[i] = 0;
+		stateRR->peaks[i] = 0;
+	}
+
+	// Init SRMAC states
+	stateHR->srmacState.prevFast = 0;
+	stateHR->srmacState.prevSlow = 0;
+	stateHR->srmacState.prevCross = 0;
+	stateRR->srmacState.prevFast = 0;
+	stateRR->srmacState.prevSlow = 0;
+	stateRR->srmacState.prevCross = 0;
+
+	// Init filter state buffers
+	for(int32_t i = 0; i < 3*SOS_SECT; i++){
+		stateHR->hpfx[i] = 0;
+		stateHR->hpfy[i] = 0;
+		stateHR->lpfx[i] = 0;
+		stateHR->lpfy[i] = 0;
+		stateRR->hpfx[i] = 0;
+		stateRR->hpfy[i] = 0;
+		stateRR->lpfx[i] = 0;
+		stateRR->lpfy[i] = 0;
+	}
+
+	// Init running values
+	stateJ->deltaSampleCount = 0;
+	stateHR->deltaSampleCount = 0;
+	stateRR->deltaSampleCount = 0;
+	stateJ->totalSampleCount = 0;
+	stateJ->runningMeanSum = 0;
+	stateJ->runningMean = 0;
+
+	return RRAL_OK;
+}
+
+// Realtime peak detection block - buffers need to be managed externally - this function only filters the last RRAL_DELTA_SAMPLES samples and detects peaks
+int32_t rral_realtime_peaks(Params_peaks_t* params, State_peaks_t* state){
+	if(params == NULL){return RRAL_ERR;}
+	if(state == NULL){return RRAL_ERR;}
+
+	// Clear peak buffer
+	for(uint16_t i = 0; i < MAX_PEAK_COUNT; i++){ 
+		state->peaks[i] = 0;
+	}
+
+	// HR bandpass filter
+	rral_sosfilt(&state->data[MAIN_BUF_SIZE - RRAL_DELTA_SAMPLES], RRAL_DELTA_SAMPLES, params->hpfsos, SOS_SECT, state->hpfx, state->hpfy);
+	rral_sosfilt(&state->data[MAIN_BUF_SIZE - RRAL_DELTA_SAMPLES], RRAL_DELTA_SAMPLES, params->lpfsos, SOS_SECT, state->lpfx, state->lpfy);
+
+	// Find heartbeats using SRMAC
+	rral_srmac(&state->data[MAIN_BUF_SIZE - RRAL_DELTA_SAMPLES], RRAL_DELTA_SAMPLES, params->srmacParams, &state->srmacState);
+
+	// Inline zero-crossing detection
+	state->peaksN = rral_zero_crossing(&state->data[0], MAIN_BUF_SIZE, state->peaks, MAX_PEAK_COUNT, params->srmacWidth, 0);
+
+	return RRAL_OK;
+}
+
+// Shift the algorithm data buffer
+int32_t rral_realtime_peaks_shift(State_peaks_t* state){
+	if(state == NULL){return RRAL_ERR;}
+
+	// Shift all samples in data back by RRAL_DELTA_SAMPLES
+	for(uint16_t i = RRAL_DELTA_SAMPLES; i < MAIN_BUF_SIZE; i++){
+		state->data[i - RRAL_DELTA_SAMPLES] = state->data[i];
+	}
+
+	return RRAL_OK;
+}
+
+// Single parameter estimation wrapper
+int32_t rral_single_param(int16_t sample, Params_peaks_t* params, State_peaks_t* state, State_joint_t* stateJ, Results_single_t* out){
+	if(params == NULL){return RRAL_ERR;}
+	if(state == NULL){return RRAL_ERR;}
+	if(stateJ == NULL){return RRAL_ERR;}
+	if(out == NULL){return RRAL_ERR;}
+
+	int32_t f_sample = 0;
+
+	// Subtract the running mean from the sample
+	if(stateJ->totalSampleCount < RUNNING_MEAN_N){
+		stateJ->runningMeanSum += sample;
+		stateJ->runningMean = stateJ->runningMeanSum / stateJ->totalSampleCount;
 	}else{
-		avgCoef = rral_float_to_fixed(-0.2f);
+		stateJ->runningMeanSum -= stateJ->runningMean;
+		stateJ->runningMeanSum += sample;
+		stateJ->runningMean = stateJ->runningMeanSum / RUNNING_MEAN_N;
 	}
 
-	// Remove flags
-	for(uint16_t i = 0; i < peakCount; i++){
-		peaks[i] &= 0x7FFF;
+	f_sample = sample - stateJ->runningMean;
+	f_sample = rral_int_to_fixed(f_sample);
+
+	// Add the sample to the data buffers
+	state->data[(MAIN_BUF_SIZE - RRAL_DELTA_SAMPLES) + stateJ->deltaSampleCount] = f_sample;
+	stateJ->deltaSampleCount++;
+	stateJ->totalSampleCount++;
+
+	if(stateJ->deltaSampleCount == RRAL_DELTA_SAMPLES){
+		stateJ->deltaSampleCount = 0;
+
+		Results_single_t results = {0, 0, 0};
+
+		results.time = (stateJ->totalSampleCount - RRAL_DELTA_SAMPLES) / SAMPLE_RATE;
+
+		// -- Rate calculation -- //
+
+		uint16_t count = 0;
+		if(rral_realtime_peaks(params, state) == RRAL_OK){
+			count = state->peaksN;
+		}
+
+		// Calculate the rate over the entire buffer window
+		if(count > 2){ // If possible skip the left-most peak as it will often have been imprecisely detected
+			results.rate = rral_int_to_fixed(state->peaks[count - 1] - state->peaks[1]) / (count - 2);
+			results.rate = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.rate);
+			results.sqi = rral_get_sqi_full(&state->data[0], MAIN_BUF_SIZE, state->peaks, count);
+		}else if(count > 1){
+			results.rate = rral_int_to_fixed(state->peaks[count - 1] - state->peaks[0]) / (count - 1);
+			results.rate = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.rate);
+			results.sqi = rral_get_sqi_full(&state->data[0], MAIN_BUF_SIZE, state->peaks, count);
+		}else{
+			results.rate = 0;
+			results.sqi = 0;
+		}
+
+		// Perform post-estimate shift
+		rral_realtime_peaks_shift(state);
+
+		// Return results
+		*out = results;
+
+		return RRAL_RDY;
 	}
 
-	return (int32_t)avgCoef;
+	return RRAL_OK;
 }
 
 // Realtime joint HR and RR algorithm
-int32_t rral_joint_hr_rr(int16_t sample, Params_joint_t* params, State_joint_t* state, Results_joint_t* out){
-	if(params == NULL){return -1;}
-	if(state == NULL){return -1;}
-	if(out == NULL){return -1;}
+int32_t rral_joint_hr_rr(int16_t sample, Params_peaks_t* paramsHR, Params_peaks_t* paramsRR, State_peaks_t* stateHR, State_peaks_t* stateRR, State_joint_t* stateJ, Results_joint_t* out){
+	if(paramsHR == NULL){return RRAL_ERR;}
+	if(paramsRR == NULL){return RRAL_ERR;}
+	if(stateHR == NULL){return RRAL_ERR;}
+	if(stateRR == NULL){return RRAL_ERR;}
+	if(stateJ == NULL){return RRAL_ERR;}
+	if(out == NULL){return RRAL_ERR;}
+
+	int32_t f_sample = 0;
 
 	// Subtract the running mean from the sample
-	if(state->runningMeanN < RUNNING_MEAN_N){
-		state->runningMeanN++;
-		state->runningMeanSum += sample;
-		state->runningMean = state->runningMeanSum / state->runningMeanN;
+	if(stateJ->totalSampleCount < RUNNING_MEAN_N){
+		stateJ->runningMeanSum += sample;
+		stateJ->runningMean = stateJ->runningMeanSum / stateJ->totalSampleCount;
 	}else{
-		state->runningMeanSum -= state->runningMean;
-		state->runningMeanSum += sample;
-		state->runningMean = state->runningMeanSum / RUNNING_MEAN_N;
+		stateJ->runningMeanSum -= stateJ->runningMean;
+		stateJ->runningMeanSum += sample;
+		stateJ->runningMean = stateJ->runningMeanSum / RUNNING_MEAN_N;
 	}
-	sample -= state->runningMean;
+
+	f_sample = sample - stateJ->runningMean;
+	f_sample = rral_int_to_fixed(f_sample);
 
 	// Add the sample to the data buffers
-	int32_t f_sample = rral_int_to_fixed(sample);
-	state->dataRR[-state->deltaSampleCount] = f_sample;
-	state->dataHR[-state->deltaSampleCount] = f_sample;
-	state->deltaSampleCount++;
-	state->totalSampleCount++;
+	stateHR->data[(MAIN_BUF_SIZE - RRAL_DELTA_SAMPLES) + stateJ->deltaSampleCount] = f_sample;
+	stateRR->data[(MAIN_BUF_SIZE - RRAL_DELTA_SAMPLES) + stateJ->deltaSampleCount] = f_sample;
+	stateJ->deltaSampleCount++;
+	stateJ->totalSampleCount++;
 
-	// If enough samples have been added perform the whole algorithm routine
-	if(state->deltaSampleCount == RRAL_DELTA_SAMPLES){
-		state->deltaSampleCount = 0;
+	if(stateJ->deltaSampleCount == RRAL_DELTA_SAMPLES){
+		stateJ->deltaSampleCount = 0;
 
 		Results_joint_t results = {0, 0, 0, 0, 0};
 
-		results.time = (state->totalSampleCount-RRAL_DELTA_SAMPLES)/SAMPLE_RATE;
+		results.time = (stateJ->totalSampleCount - RRAL_DELTA_SAMPLES) / SAMPLE_RATE;
 
-		// --- HR/RR algorithm routine start --- //
+		// -- HR routine -- //
 
-		// Clear peak buffer
-		for(uint16_t i = 0; i < MAX_PEAK_COUNT; i++){ 
-			state->peaks[i] = 0;
+		uint16_t beatcount = 0;
+		if(rral_realtime_peaks(paramsHR, stateHR) == RRAL_OK){
+			beatcount = stateHR->peaksN;
 		}
 
-		// --- HR start --- //
-
-		// // Filter a sub-array of dataHR[] which contains only all of the new samples since last execution
-		int32_t* dataSub = &state->dataHR[MAIN_BUF_SIZE-RRAL_DELTA_SAMPLES];
-
-		// HR bandpass filter
-		rral_sosfilt(dataSub, RRAL_DELTA_SAMPLES, params->hpfsosHR, SOS_SECT, state->hpfxHR, state->hpfyHR);
-		rral_sosfilt(dataSub, RRAL_DELTA_SAMPLES, params->lpfsosHR, SOS_SECT, state->lpfxHR, state->lpfyHR);
-
-		// Find heartbeats using SRMAC
-		rral_srmac(dataSub, RRAL_DELTA_SAMPLES, params->srmacParamsHR, &state->srmacStateHR);
-
-		// Inline zero-crossing detection
-		dataSub = &state->dataHR[MAIN_BUF_HALF_SIZE];
-		uint16_t beatcount = 0;
-		beatcount = rral_zero_crossing(dataSub, MAIN_BUF_HALF_SIZE, state->peaks, MAX_PEAK_COUNT, params->srmacWidthHR, 0);
-
-		// HR over the entire (half) window
-		if(beatcount > 2){
-			results.hr = rral_int_to_fixed(state->peaks[beatcount-1] - state->peaks[1]) / (beatcount - 2);
+		// Calculate the HR over the entire buffer window
+		if(beatcount > 2){ // If possible skip the left-most heartbeat as it will often have been imprecisely detected due to edge effects
+			results.hr = rral_int_to_fixed(stateHR->peaks[beatcount - 1] - stateHR->peaks[1]) / (beatcount - 2);
 			results.hr = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.hr);
-			results.sqihr = rral_get_sqi_full(dataSub, MAIN_BUF_HALF_SIZE, state->peaks, beatcount);
+			// results.hr = rral_int_to_fixed(stateHR->peaks[beatcount - 1] - stateHR->peaks[beatcount - 2]);
+			// results.hr = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.hr);
+			results.sqihr = rral_get_sqi_full(&stateHR->data[0], MAIN_BUF_SIZE, stateHR->peaks, beatcount);
 		}else if(beatcount > 1){
-			results.hr = rral_int_to_fixed(state->peaks[beatcount-1] - state->peaks[0]) / (beatcount - 1);
+			results.hr = rral_int_to_fixed(stateHR->peaks[beatcount - 1] - stateHR->peaks[0]) / (beatcount - 1);
 			results.hr = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.hr);
-			results.sqihr = rral_get_sqi_full(dataSub, MAIN_BUF_HALF_SIZE, state->peaks, beatcount);
+			// results.hr = rral_int_to_fixed(stateHR->peaks[beatcount - 1] - stateHR->peaks[beatcount - 2]);
+			// results.hr = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.hr);
+			results.sqihr = rral_get_sqi_full(&stateHR->data[0], MAIN_BUF_SIZE, stateHR->peaks, beatcount);
 		}else{
 			results.hr = 0;
 			results.sqihr = 0;
 		}
 
-		// Clear peak buffer
-		for(uint16_t i = 0; i < MAX_PEAK_COUNT; i++){ 
-			state->peaks[i] = 0;
-		}
-
-		// Shift all samples in dataHR back by windowStep
-		for(uint16_t i = RRAL_DELTA_SAMPLES; i < MAIN_BUF_SIZE; i++){
-			state->dataHR[i-RRAL_DELTA_SAMPLES] = state->dataHR[i];
-		}
+		// Perform post-estimate shift
+		rral_realtime_peaks_shift(stateHR);
 
 		// --- HR end ----- //
 
-		// --- RR start --- //
+		// -- RR routine -- //
 
-		// Sub-array of dataRR
-		dataSub = &state->dataRR[MAIN_BUF_SIZE-RRAL_DELTA_SAMPLES];
-
-		// RR bandpass filter
-		rral_sosfilt(dataSub, RRAL_DELTA_SAMPLES, params->hpfsosRR, SOS_SECT, state->hpfxRR, state->hpfyRR);
-		rral_sosfilt(dataSub, RRAL_DELTA_SAMPLES, params->lpfsosRR, SOS_SECT, state->lpfxRR, state->lpfyRR);
-
-		// Find respiration peaks using SRMAC
-		dataSub = &state->dataRR[MAIN_BUF_SIZE-RRAL_DELTA_SAMPLES];
-		rral_srmac(dataSub, RRAL_DELTA_SAMPLES, params->srmacParamsRR, &state->srmacStateRR);
-
-		// Inline zero-crossing detection
-		dataSub = &state->dataRR[0];
 		uint16_t breathcount = 0;
-		breathcount = rral_zero_crossing(dataSub, MAIN_BUF_SIZE, state->peaks, MAX_PEAK_COUNT, params->srmacWidthRR, 0);
+		if(rral_realtime_peaks(paramsRR, stateRR) == RRAL_OK){
+			breathcount = stateRR->peaksN;
+		}
 
-		// RR over the entire window
+		// Calculate the RR over the entire buffer window
 		if(breathcount > 2){ // If possible skip the left-most breath as it will often have been imprecisely detected due to edge effects
-			results.rr = rral_int_to_fixed(state->peaks[breathcount-1] - state->peaks[1]) / (breathcount - 2);
+			results.rr = rral_int_to_fixed(stateRR->peaks[breathcount - 1] - stateRR->peaks[1]) / (breathcount - 2);
 			results.rr = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.rr);
-			results.sqirr = rral_get_sqi_full(dataSub, MAIN_BUF_SIZE, state->peaks, breathcount);
+			results.sqirr = rral_get_sqi_full(&stateRR->data[0], MAIN_BUF_SIZE, stateRR->peaks, breathcount);
 		}else if(breathcount > 1){
-			results.rr = rral_int_to_fixed(state->peaks[breathcount-1] - state->peaks[0]) / (breathcount - 1);
+			results.rr = rral_int_to_fixed(stateRR->peaks[breathcount - 1] - stateRR->peaks[0]) / (breathcount - 1);
 			results.rr = rral_div32(rral_int_to_fixed(60 * SAMPLE_RATE), results.rr);
-			results.sqirr = rral_get_sqi_full(dataSub, MAIN_BUF_SIZE, state->peaks, breathcount);
+			results.sqirr = rral_get_sqi_full(&stateRR->data[0], MAIN_BUF_SIZE, stateRR->peaks, breathcount);
 		}else{
 			results.rr = 0;
 			results.sqirr = 0;
 		}
-		
-		// Clear peak buffer
-		for(uint16_t i = 0; i < MAX_PEAK_COUNT; i++){ 
-			state->peaks[i] = 0;
-		}
 
-		// Shift all samples in dataHR back by windowStep
-		for(uint16_t i = RRAL_DELTA_SAMPLES; i < MAIN_BUF_SIZE; i++){
-			state->dataHR[i-RRAL_DELTA_SAMPLES] = state->dataHR[i];
-		}
+		// Perform post-estimate shift
+		rral_realtime_peaks_shift(stateRR);
 
+		// --- RR end ----- //
+
+		// Return results
 		*out = results;
 
-		return 1;
+		return RRAL_RDY;
 	}
 
-	return 0;
+	return RRAL_OK;
 }
-
-
-
 
 #if RRAL_CWT_ENABLED == 1
 // Mexh wavelet
@@ -1181,16 +1181,30 @@ float rral_gaus2(float t){
 
 // Scaled version of the Mexh wavelet
 float rral_mexh_scaled(float t, float scale){
+	if(scale == 0){return 0;}
 	return (1/sqrtf(scale))*rral_mexh(t/scale);
 }
 
 // Scaled version of the Gaus2 wavelet
 float rral_gaus2_scaled(float t, float scale){
+	if(scale == 0){return 0;}
 	return (1/sqrtf(scale))*rral_gaus2(t/scale);
+}
+
+// Scaled wavelet wrapper function
+float rral_wavelet_scaled(float t, float scale){
+	if(scale == 0){return 0;}
+	#if RRAL_CWT_WAVELET == 1
+	return (1/sqrtf(scale))*rral_mexh(t/scale);
+	#else
+	return (1/sqrtf(scale))*rral_gaus2(t/scale);
+	#endif
 }
 
 // CWT implementation using almost entirely floating point calculations to take advantage of the existing dsps_conv.h signal processing methods
 int32_t rral_cwt(int32_t* data, uint16_t dataLen, float minFreq, float maxFreq, float* fft_table){
+	if(data == NULL){return RRAL_ERR;}
+	if(fft_table == NULL){return RRAL_ERR;}
 
 	static float scales[CWT_SCALES_SIZE];
 
@@ -1237,10 +1251,10 @@ int32_t rral_cwt(int32_t* data, uint16_t dataLen, float minFreq, float maxFreq, 
 			kernel[i] = 0;
 		}
 
-		// Fill all even indices of the kernel buffer with real values of the gaus2 wavelet
+		// Fill all even indices of the kernel buffer with real values of the chosen wavelet
 		for(int16_t i = 0; i < KERNEL_SIZE; i++){
 			if(i*2 < CWT_BUF_SIZE){
-				kernel[i*2] = rral_gaus2_scaled(((float)i)-(KERNEL_SIZE/2), scale);
+				kernel[i*2] = rral_wavelet_scaled(((float)i)-(KERNEL_SIZE/2), scale);
 			}
 		}
 
@@ -1283,12 +1297,14 @@ int32_t rral_cwt(int32_t* data, uint16_t dataLen, float minFreq, float maxFreq, 
 		}
 	}
 
-	return 0;
+	return RRAL_OK;
 }
 
 // Overlap-add CWT to decrease the memory constraints of the algorithm by an order of magnitude
 // Could be optimized for speed by storing kernels in memory which would increase memory consumption but increase execution speed massively
 int32_t rral_cwt_oa(int32_t* data, uint16_t dataLen, float minFreq, float maxFreq, float* fft_table) {
+	if(data == NULL){return RRAL_ERR;}
+	if(fft_table == NULL){return RRAL_ERR;}
 
 	float scales[CWT_SCALES_SIZE];
 
@@ -1348,10 +1364,10 @@ int32_t rral_cwt_oa(int32_t* data, uint16_t dataLen, float minFreq, float maxFre
 				kernel[j] = 0;
 			}
 
-			// Fill all even indices of the kernel buffer with real values of the gaus2 wavelet
+			// Fill all even indices of the kernel buffer with real values of the chosen wavelet
 			for (int16_t j = 0; j < KERNEL_SIZE; j++) {
 				if (j * 2 < CWT_OA_SIZE) {
-					kernel[j * 2] = rral_gaus2_scaled(((float)j) - (KERNEL_SIZE / 2), scale);
+					kernel[j * 2] = rral_wavelet_scaled(((float)j) - (KERNEL_SIZE / 2), scale);
 				}
 			}
 
@@ -1395,13 +1411,14 @@ int32_t rral_cwt_oa(int32_t* data, uint16_t dataLen, float minFreq, float maxFre
 		}
 	}
 
-	return 0;
+	return RRAL_OK;
 }
 
 // Kernel precalculation function for the optimized overlap-add CWT algorithm
 int32_t rral_cwt_oa_fast_init(float* kernels, int32_t kernelBufLen, float minFreq, float maxFreq, float* fft_table) {
-	if (kernels == NULL) { return -2; }
-	if (kernelBufLen < CWT_OA_SIZE * CWT_SCALES_SIZE) { return -1; }
+	if (kernels == NULL) { return RRAL_ERR; }
+	if (fft_table == NULL) { return RRAL_ERR; }
+	if (kernelBufLen < CWT_OA_SIZE * CWT_SCALES_SIZE) { return RRAL_ERR; }
 
 	float scales[CWT_SCALES_SIZE];
 
@@ -1430,10 +1447,10 @@ int32_t rral_cwt_oa_fast_init(float* kernels, int32_t kernelBufLen, float minFre
 			kernel[j] = 0;
 		}
 
-		// Fill all even indices of the kernel buffer with real values of the gaus2 wavelet
+		// Fill all even indices of the kernel buffer with real values of the chosen wavelet
 		for (int16_t j = 0; j < KERNEL_SIZE; j++) {
 			if (j * 2 < CWT_OA_SIZE) {
-				kernel[j * 2] = rral_gaus2_scaled(((float)j) - (KERNEL_SIZE / 2), scale);
+				kernel[j * 2] = rral_wavelet_scaled(((float)j) - (KERNEL_SIZE / 2), scale);
 			}
 		}
 
@@ -1442,11 +1459,14 @@ int32_t rral_cwt_oa_fast_init(float* kernels, int32_t kernelBufLen, float minFre
 		dsps_bit_rev_fc32_ansi(kernel, CWT_OA_SIZE / 2);
 	}
 
-	return 0;
+	return RRAL_OK;
 }
 
 // Overlap-add CWT with saved kernels for better performance
 int32_t rral_cwt_oa_fast(int32_t* data, uint16_t dataLen, float* fft_table, float* kernels) {
+	if(data == NULL){return RRAL_ERR;}
+	if(kernels == NULL){return RRAL_ERR;}
+	if(fft_table == NULL){return RRAL_ERR;}
 
 	float window[CWT_OA_SIZE];
 	float result[CWT_OA_SIZE];
@@ -1528,7 +1548,7 @@ int32_t rral_cwt_oa_fast(int32_t* data, uint16_t dataLen, float* fft_table, floa
 		}
 	}
 
-	return 0;
+	return RRAL_OK;
 }
 
 
