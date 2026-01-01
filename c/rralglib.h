@@ -213,9 +213,9 @@ int32_t rral_get_sqi_lite(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 int32_t rral_get_sqi_full(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint16_t peakCount);
 
 // REALTIME PROCESSING ALGORITHMS
-int32_t rral_single_param_state_init(State_joint_t* stateJ, State_peaks_t* state);
+int32_t rral_state_peaks_init(State_peaks_t* state);
 
-int32_t rral_joint_hr_rr_state_init(State_joint_t* stateJ, State_peaks_t* stateHR, State_peaks_t* stateRR);
+int32_t rral_state_joint_init(State_joint_t* state);
 
 int32_t rral_realtime_peaks(Params_peaks_t* params, State_peaks_t* state);
 

@@ -875,9 +875,9 @@ int32_t rral_get_sqi_full(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 	return coefs / validCoefs;
 }
 
-// Zero-init single parameter state structs
-int32_t rral_single_param_state_init(State_joint_t* stateJ, State_peaks_t* state){
-	if(stateJ == NULL){return RRAL_ERR;}
+
+// Zero-init realtime peak detection block state struct
+int32_t rral_state_peaks_init(State_peaks_t* state){
 	if(state == NULL){return RRAL_ERR;}
 
 	// Init data buffers
@@ -903,61 +903,21 @@ int32_t rral_single_param_state_init(State_joint_t* stateJ, State_peaks_t* state
 		state->lpfy[i] = 0;
 	}
 
-	// Init running values
 	state->deltaSampleCount = 0;
-	stateJ->deltaSampleCount = 0;
-	stateJ->totalSampleCount = 0;
-	stateJ->runningMeanSum = 0;
-	stateJ->runningMean = 0;
+	state->peaksN = 0;
 
 	return RRAL_OK;
 }
 
-// Zero-init joint hr/rr state structs
-int32_t rral_joint_hr_rr_state_init(State_joint_t* stateJ, State_peaks_t* stateHR, State_peaks_t* stateRR){
-	if(stateJ == NULL){return RRAL_ERR;}
-	if(stateHR == NULL){return RRAL_ERR;}
-	if(stateRR == NULL){return RRAL_ERR;}
-
-	// Init data buffers
-	for(int32_t i = 0; i < MAIN_BUF_SIZE; i++){
-		stateHR->data[i] = 0;
-		stateRR->data[i] = 0;
-	}
-
-	// Init peak buffer
-	for(int32_t i = 0; i < MAX_PEAK_COUNT; i++){
-		stateHR->peaks[i] = 0;
-		stateRR->peaks[i] = 0;
-	}
-
-	// Init SRMAC states
-	stateHR->srmacState.prevFast = 0;
-	stateHR->srmacState.prevSlow = 0;
-	stateHR->srmacState.prevCross = 0;
-	stateRR->srmacState.prevFast = 0;
-	stateRR->srmacState.prevSlow = 0;
-	stateRR->srmacState.prevCross = 0;
-
-	// Init filter state buffers
-	for(int32_t i = 0; i < 3*SOS_SECT; i++){
-		stateHR->hpfx[i] = 0;
-		stateHR->hpfy[i] = 0;
-		stateHR->lpfx[i] = 0;
-		stateHR->lpfy[i] = 0;
-		stateRR->hpfx[i] = 0;
-		stateRR->hpfy[i] = 0;
-		stateRR->lpfx[i] = 0;
-		stateRR->lpfy[i] = 0;
-	}
+// Zero-init realtime joint state struct
+int32_t rral_state_joint_init(State_joint_t* state){
+	if(state == NULL){return RRAL_ERR;}
 
 	// Init running values
-	stateJ->deltaSampleCount = 0;
-	stateHR->deltaSampleCount = 0;
-	stateRR->deltaSampleCount = 0;
-	stateJ->totalSampleCount = 0;
-	stateJ->runningMeanSum = 0;
-	stateJ->runningMean = 0;
+	state->deltaSampleCount = 0;
+	state->totalSampleCount = 0;
+	state->runningMeanSum = 0;
+	state->runningMean = 0;
 
 	return RRAL_OK;
 }
