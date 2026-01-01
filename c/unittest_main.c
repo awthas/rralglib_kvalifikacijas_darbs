@@ -150,7 +150,24 @@ void test_isqrt32_one(void) {
 
 void test_isqrt32_max(void) {
     int32_t ret = rral_isqrt32(0xFFFFFFFF);
-    TEST_ASSERT_EQUAL(0x0000FFFF, ret); // 65535.999... rounded down
+    TEST_ASSERT_EQUAL(0x0000FFFF, ret);
+}
+
+// rral_isqrt32 // 
+
+void test_isqrt64_zero(void) {
+    int32_t ret = rral_isqrt64(0);
+    TEST_ASSERT_EQUAL(0x00000000, ret);
+}
+
+void test_isqrt64_one(void) {
+    int32_t ret = rral_isqrt64(1);
+    TEST_ASSERT_EQUAL(0x00000001, ret);
+}
+
+void test_isqrt64_max(void) {
+    int32_t ret = rral_isqrt64(0xFFFFFFFFFFFFFFFF);
+    TEST_ASSERT_EQUAL(0x00000000FFFFFFFF, ret);
 }
 
 // rral_mean_and_stdev //
@@ -190,8 +207,7 @@ void test_meanstdev_sine(void) {
     int32_t ret = rral_mean_and_sdev(data, 16, &mean, &stdev);
 
     TEST_ASSERT_EQUAL(0x00000000, mean);
-    TEST_ASSERT_EQUAL(0x02C20000, (stdev &= 0xFFFF0000)); // A fair amount of error is permissible so check only if the integer part matches
-    //TEST_ASSERT_EQUAL_FLOAT(706.7f, rral_fixed_to_float(stdev));
+    TEST_ASSERT_EQUAL_FLOAT(706.79521, rral_fixed_to_float(stdev));
 }
 
 void test_meanstdev_unitvar(void) {
@@ -220,8 +236,7 @@ void test_meanstdev_unitvar(void) {
     int32_t ret = rral_mean_and_sdev(data, 16, &mean, &stdev);
 
     TEST_ASSERT_EQUAL(0x00000000, mean);
-    TEST_ASSERT_LESS_OR_EQUAL_FLOAT(1.01f, rral_fixed_to_float(stdev)); // A fair amount of error is permissible
-    TEST_ASSERT_GREATER_OR_EQUAL_FLOAT(0.99f, rral_fixed_to_float(stdev));
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, rral_fixed_to_float(stdev));
 }
 
 void test_meanstdev_noise(void) {
@@ -296,6 +311,51 @@ void test_sqifull_twopeaks(void) {
     uint16_t peaks[2] = { 24, 48 };
 
     int32_t sqi = rral_get_sqi_full(data, 128, peaks, 2);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, rral_fixed_to_float(sqi));
+}
+void test_sqilite_pattern(void) {
+    int32_t pattern[8] = {
+        rral_int_to_fixed(1),
+        rral_int_to_fixed(2),
+        rral_int_to_fixed(3),
+        rral_int_to_fixed(4),
+        rral_int_to_fixed(5),
+        rral_int_to_fixed(4),
+        rral_int_to_fixed(3),
+        rral_int_to_fixed(2),
+    };
+    int32_t data[128];
+
+    for (int32_t i = 0; i < 128; i++) {
+        data[i] = pattern[i % 8];
+    }
+
+    uint16_t peaks[4] = { 20, 28, 36, 52 };
+
+    int32_t sqi = rral_get_sqi_lite(data, 128, peaks, 4, 0, 0);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, rral_fixed_to_float(sqi));
+}
+
+void test_sqilite_twopeaks(void) {
+    int32_t pattern[8] = {
+        rral_int_to_fixed(1),
+        rral_int_to_fixed(2),
+        rral_int_to_fixed(3),
+        rral_int_to_fixed(4),
+        rral_int_to_fixed(5),
+        rral_int_to_fixed(4),
+        rral_int_to_fixed(3),
+        rral_int_to_fixed(2),
+    };
+    int32_t data[128];
+
+    for (int32_t i = 0; i < 128; i++) {
+        data[i] = pattern[i % 8];
+    }
+
+    uint16_t peaks[2] = { 24, 48 };
+
+    int32_t sqi = rral_get_sqi_lite(data, 128, peaks, 2, 0, 0);
     TEST_ASSERT_EQUAL_FLOAT(1.0f, rral_fixed_to_float(sqi));
 }
 
@@ -427,6 +487,148 @@ void test_findpeaks_sine(void) {
     TEST_ASSERT_EQUAL(4, peaks[0]);
 }
 
+void_test_statepeaksinit_ptr(void) {
+    State_peaks_t state;
+
+    int32_t ret = rral_state_peaks_init(&state);
+
+    TEST_ASSERT_EQUAL(RRAL_OK, ret);
+}
+
+void_test_statepeaksinit_null(void) {
+    int32_t ret = rral_state_peaks_init(NULL);
+
+    TEST_ASSERT_EQUAL(RRAL_ERR, ret);
+}
+
+void_test_statejointinit_ptr(void) {
+    State_joint_t state;
+
+    int32_t ret = rral_state_joint_init(&state);
+
+    TEST_ASSERT_EQUAL(RRAL_OK, ret);
+}
+
+void_test_statejointinit_null(void) {
+    int32_t ret = rral_state_joint_init(NULL);
+
+    TEST_ASSERT_EQUAL(RRAL_ERR, ret);
+}
+
+void test_srmac_zeroes(void) {
+    int32_t data[128];
+    int32_t result[128];
+
+    for (uint16_t i = 0; i < 128; i++) {
+        data[i] = 0;
+        result[i] = 0;
+    }
+
+    State_srmac_t state = { 0, 0, 0 };
+    Params_srmac_t params = { rral_float_to_fixed(0.5f), rral_float_to_fixed(0.5f) , rral_float_to_fixed(0.5f) };
+
+    int32_t ret = rral_srmac(data, 128, params, &state);
+
+    TEST_ASSERT_EQUAL_INT_ARRAY(data, result, 128);
+}
+
+void test_srmac_alternating(void) {
+    int32_t data[128];
+    int32_t result[128];
+
+    for (uint16_t i = 0; i < 128; i++) {
+        if (i % 2 == 0) {
+            data[i] = rral_float_to_fixed(0);
+            result[i] = rral_float_to_fixed(0.133333f);
+        }
+        else {
+            data[i] = rral_float_to_fixed(1);
+            result[i] = rral_float_to_fixed(-0.133333f);
+        }
+    }
+
+    State_srmac_t state = { 0, 0, 0 };
+    Params_srmac_t params = { rral_float_to_fixed(0.5f), rral_float_to_fixed(0.75f) , rral_float_to_fixed(1.0f) };
+
+    int32_t ret = rral_srmac(data, 128, params, &state);
+
+    TEST_ASSERT_EQUAL_INT_ARRAY(&data[64], &result[64], 64);
+}
+
+void test_terma_zeroes(void) {
+    int32_t data[128];
+    int32_t result[128];
+
+    for (uint16_t i = 0; i < 128; i++) {
+        data[i] = 0;
+        result[i] = 0;
+    }
+
+    int32_t ret = rral_terma(data, 128, 0);
+
+    TEST_ASSERT_EQUAL_INT_ARRAY(result, data, 128);
+}
+
+void test_terma_alternating(void) {
+    int32_t data[128];
+    int32_t result[128];
+
+    for (uint16_t i = 0; i < 128; i++){
+        if (i % 2 == 0) {
+            data[i] = rral_float_to_fixed(0);
+            result[i] = rral_float_to_fixed(0.166665f);
+        }
+        else {
+            data[i] = rral_float_to_fixed(1);
+            result[i] = rral_float_to_fixed(-0.166664f);
+        }
+    }
+
+    int32_t ret = rral_terma(data, 128, 0);
+
+    TEST_ASSERT_EQUAL_INT_ARRAY(&result[32], &data[32], 64);
+}
+
+void test_sosfilt_zeroes(void) {
+    int32_t data[128];
+    int32_t result[128];
+
+    for (uint16_t i = 0; i < 128; i++) {
+        data[i] = 0;
+        result[i] = 0;
+    }
+
+    int32_t x[3 * 2] = { 0, 0, 0, 0, 0, 0 };
+    int32_t y[3 * 2] = { 0, 0, 0, 0, 0, 0 };
+
+    // 3rd order Butterworth LPF @ 0.8Hz
+    int32_t sos[12] = { rral_float_to_fixed(5.6070114946958646e-05f),rral_float_to_fixed(0.00011214022989391729f),rral_float_to_fixed(5.6070114946958646e-05f),rral_float_to_fixed(1.0f),rral_float_to_fixed(-0.9243904916582071f),rral_float_to_fixed(0.0f),rral_float_to_fixed(1.0f),rral_float_to_fixed(1.0f),rral_float_to_fixed(0.0f),rral_float_to_fixed(1.0f),rral_float_to_fixed(-1.9185700325442732f),rral_float_to_fixed(0.924502631888101f) };
+
+    int32_t ret = rral_sosfilt(data, 128, sos, 2, x, y);
+
+    TEST_ASSERT_EQUAL_INT_ARRAY(result, data, 128);
+}
+
+void test_sosfilt_alternating(void) {
+    int32_t data[128];
+    int32_t result[128];
+
+    for (uint16_t i = 0; i < 128; i++) {
+        data[i] = i % 2;
+        result[i] = 0;
+    }
+
+    int32_t x[3 * 2] = { 0, 0, 0, 0, 0, 0 };
+    int32_t y[3 * 2] = { 0, 0, 0, 0, 0, 0 };
+
+    // 3rd order Butterworth LPF @ 4Hz
+    int32_t sos[12] = { rral_float_to_fixed(0.0053004097945258),rral_float_to_fixed(0.0106008195890516),rral_float_to_fixed(0.0053004097945258),rral_float_to_fixed(1.0),rral_float_to_fixed(-0.6681786379192989),rral_float_to_fixed(0.0),rral_float_to_fixed(1.0),rral_float_to_fixed(1.0),rral_float_to_fixed(0.0),rral_float_to_fixed(1.0),rral_float_to_fixed(-1.5509899803923661),rral_float_to_fixed(0.6787794575083502) };
+
+    int32_t ret = rral_sosfilt(data, 128, sos, 2, x, y);
+
+    TEST_ASSERT_EQUAL_INT_ARRAY(&result[32], &data[32], 96);
+}
+
 int main()
 {
     char temp[32];
@@ -488,7 +690,7 @@ int main()
     printf(temp);
     RUN_TEST(test_isqrt32_zero);
     RUN_TEST(test_isqrt32_one);
-    RUN_TEST(test_isqrt32_max);
+    RUN_TEST(test_isqrt32_max);    
     
     // rral_mean_and_stdev
     templ = sprintf_s(temp, 32, "\n- rral_mean_and_stdev -\n");
@@ -535,34 +737,46 @@ int main()
     RUN_TEST(test_findpeaks_sine);
 
     // rral_srmac
-    //templ = sprintf_s(temp, 32, "\n- rral_srmac -\n");
-    //printf(temp);
-    //RUN_TEST(test_srmac_zeroes);
-    //RUN_TEST(test_srmac_one);
-    //RUN_TEST(test_srmac_impulse);
-    //RUN_TEST(test_srmac_sine);
+    templ = sprintf_s(temp, 32, "\n- rral_srmac -\n");
+    printf(temp);
+    RUN_TEST(test_srmac_zeroes);
+    RUN_TEST(test_srmac_alternating);
 
-    // rral_terma
-    //templ = sprintf_s(temp, 32, "\n- rral_terma -\n");
-    //printf(temp);
-    //RUN_TEST(test_terma_zeroes);
-    //RUN_TEST(test_terma_one);
-    //RUN_TEST(test_terma_impulse);
-    //RUN_TEST(test_terma_sine);
+    // rral_srmac
+    templ = sprintf_s(temp, 32, "\n- rral_terma -\n");
+    printf(temp);
+    RUN_TEST(test_terma_zeroes);
+    RUN_TEST(test_terma_alternating);
 
-    // rral_wavelet
+    // sosfilt
+    templ = sprintf_s(temp, 32, "\n- rral_sosfilt -\n");
+    printf(temp);
+    RUN_TEST(test_sosfilt_zeroes);
+    RUN_TEST(test_sosfilt_alternating);
 
-
-
-    // rral_cwt_oa
-
-
-
-    // rral_sqi_full
-    templ = sprintf_s(temp, 32, "\n- rral_sqi_full -\n");
+    // rral_get_sqi_full
+    templ = sprintf_s(temp, 32, "\n- rral_get_sqi_full -\n");
     printf(temp);
     RUN_TEST(test_sqifull_pattern);
     RUN_TEST(test_sqifull_twopeaks);
+    
+    // rral_get_sqi_lite
+    templ = sprintf_s(temp, 32, "\n- rral_get_sqi_lite -\n");
+    printf(temp);
+    RUN_TEST(test_sqilite_pattern);
+    RUN_TEST(test_sqilite_twopeaks);
+
+    // rral_state_peaks_init
+    templ = sprintf_s(temp, 32, "\n- rral_state_peaks_init -\n");
+    printf(temp);
+    RUN_TEST(void_test_statepeaksinit_ptr);
+    RUN_TEST(void_test_statepeaksinit_null);
+
+    // rral_state_joint_init
+    templ = sprintf_s(temp, 32, "\n- rral_state_joint_init -\n");
+    printf(temp);
+    RUN_TEST(void_test_statejointinit_ptr);
+    RUN_TEST(void_test_statejointinit_null);
 
 	return UNITY_END();
 }
