@@ -241,6 +241,8 @@ int32_t rral_cwt(int32_t* data, uint16_t dataLen, float minFreq, float maxFreq, 
 
 int32_t rral_cwt_oa(int32_t* data, uint16_t dataLen, float minFreq, float maxFreq, float* fft_table);
 
+int32_t rral_cwt_oa_fast_init(float* kernels, int32_t kernelBufLen, float minFreq, float maxFreq, float* fft_table);
+
 int32_t rral_cwt_fixed(int16_t* data, uint16_t dataLen, int16_t minFreq, int16_t maxFreq, int16_t* fft_table);
 #endif
 
