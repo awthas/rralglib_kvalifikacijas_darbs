@@ -1180,7 +1180,7 @@ class MainWindow(QWidget):
 
     ### Show general info about the application
     def show_about(self):
-        if self.running():
+        if self.running:
             self.play_button_pressed()
         AboutDialog(self).exec()
 
