@@ -826,7 +826,7 @@ class MainWindow(QWidget):
             ### EWMA fast coefficient
             try:
                 if self.srmac_coef_fast_line_edit.text() is not None:
-                    self.params_srmac_coef_fast = float(self.srmac_coef_fast_line_edit.text()) / self.coef_resolution
+                    self.params_srmac_coef_fast = float(self.srmac_coef_fast_line_edit.text())
                     self.srmac_coef_fast_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC fast coefficient could not be converted to float")
@@ -836,7 +836,7 @@ class MainWindow(QWidget):
             ### EWMA slow coefficient
             try:
                 if self.srmac_coef_slow_line_edit.text() is not None:
-                    self.params_srmac_coef_slow = float(self.srmac_coef_slow_line_edit.text()) / self.coef_resolution
+                    self.params_srmac_coef_slow = float(self.srmac_coef_slow_line_edit.text())
                     self.srmac_coef_slow_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC slow coefficient could not be converted to float")
@@ -846,7 +846,7 @@ class MainWindow(QWidget):
             ### EWMA cross coefficient
             try:
                 if self.srmac_coef_cross_line_edit.text() is not None:
-                    self.params_srmac_coef_cross = float(self.srmac_coef_cross_line_edit.text()) / self.coef_resolution
+                    self.params_srmac_coef_cross = float(self.srmac_coef_cross_line_edit.text())
                     self.srmac_coef_cross_line_edit.setStyleSheet(self.stylesheet_lineedit_valid)
             except:
                 print("Error: SRMAC cross coefficient could not be converted to float")
