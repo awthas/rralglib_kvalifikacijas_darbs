@@ -650,7 +650,6 @@ int32_t rral_get_sqi_lite(int32_t* data, uint16_t dataLen, uint16_t* peaks, uint
 
 		if(peaks[i] < halfdist){ inv++; continue;}
 		if(dataLen-peaks[i+1] < halfdist){ inv++; continue;}
-		if(halfdist < SAMPLE_RATE / 4){ inv++; continue; }
 
 		int32_t* fst = &data[peaks[i]];
 		int32_t* snd = &data[peaks[i+1]];
