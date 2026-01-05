@@ -27,8 +27,8 @@
 #define MAX_PEAK_COUNT 256
 
 // TERMA DEFINES //
-#define EVENT_BUF_SIZE (SAMPLE_RATE / 5)                        // sr * 0.2
-#define CYCLE_BUF_SIZE ((SAMPLE_RATE * 2) + (SAMPLE_RATE / 10)) // sr * 2.1
+#define EVENT_BUF_SIZE (SAMPLE_RATE / 10)
+#define CYCLE_BUF_SIZE (SAMPLE_RATE / 20)
 
 // CWT DEFINES //
 #if RRAL_CWT_ENABLED == 1
