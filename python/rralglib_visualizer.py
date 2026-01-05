@@ -395,8 +395,8 @@ class MainWindow(QWidget):
         #region
 
         ### Stylesheets
-        self.stylesheet_lineedit_valid = "background-color: #FFFFFF;"
-        self.stylesheet_lineedit_invalid = "background-color: #FF0000;"
+        self.stylesheet_lineedit_valid = "background-color: #FFFFFF; color:black;"
+        self.stylesheet_lineedit_invalid = "background-color: #FF0000; color:black;"
 
         # Top bar layout
         self.top_layout = QHBoxLayout()
